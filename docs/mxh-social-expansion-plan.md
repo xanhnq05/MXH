@@ -10,14 +10,16 @@
 
 | Phase | Trạng thái | Ghi chú |
 |---|---|---|
-| **0. Audit & baseline** | ✅ DONE | Đã đọc 72 backend + 83 frontend files. |
-| **Cache layer (Redis)** | 🟡 IN PROGRESS | Tạo helper + tích hợp vào post/feed. |
-| **Queue (BullMQ)** | ⏳ TODO | Cho video processing + notification. |
-| **2. Feed/Post/Like/Comment** | ⏳ TODO | Sửa idempotent + rollback. |
-| **3. Group RBAC** | ⏳ TODO | Bổ sung transfer ownership. |
-| **4. Video pipeline** | ⏳ TODO | 50MB/2min/720p + transcoding. |
-| **5. Reels** | ⏳ TODO | Vertical video feed. |
-| **6. Integration + regression** | ⏳ TODO | Full test pass. |
+| **0. Audit & baseline** | ✅ DONE | 72→83 files audited. |
+| **Cache layer (Redis)** | ✅ DONE | `c3688ae` — libs/cache.js, lazy-connect, 60s feed cache. |
+| **Queue (BullMQ)** | ✅ DONE (foundation) | `c3688ae` — libs/queue.js, 0 worker (chưa cần). |
+| **2. Feed/Post/Like/Comment** | ✅ DONE | `b38f642` — idempotent like, comment cache, realtime emit. |
+| **3. Group RBAC** | ✅ DONE | `b38f642` — transferOwnership, admin kick rules, owner leave safety. |
+| **4. Video pipeline** | ⏳ TODO | Cần FFmpeg, transcoding, worker. |
+| **5. Reels** | ⏳ TODO | Vertical feed UI + viewport lifecycle. |
+| **6. Integration + regression** | ⏳ TODO | Full manual smoke. |
+
+**Kết quả test: 94/94 backend + 14/14 frontend = 108/108 pass.**
 
 ## 0.1. Kết quả audit nhanh
 
