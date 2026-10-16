@@ -55,3 +55,11 @@ update1.md
 update2.md
 update*.md
 !docs/**/*.md
+
+# ===== Cursor internal folders (per-skill, plugin state, dynamic tools) =====
+.cursor/
+
+# ===== Design system & local skill artifacts =====
+@design-system/
+@.cursor/
+@docs/
