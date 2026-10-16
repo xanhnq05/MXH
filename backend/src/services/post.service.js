@@ -9,6 +9,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { uploadService } from "./upload.service.js";
 import { paginate } from "../utils/pagination.js";
 import { notificationService } from "./notification.service.js";
+import cache from "../libs/cache.js";
 
 const stripDeleted = (post) => {
   if (post.deletedAt) {
@@ -47,6 +48,10 @@ export const postService = {
       visibility: visibility || "public",
     });
     await post.populate("authorId", "username displayName avatarUrl");
+
+    // Invalidate feed cache cua author (de bai moi xuat hien ngay)
+    await cache.delPattern(`feed:user:${authorId.toString()}:*`);
+
     return post.toClient();
   },
 
@@ -109,7 +114,21 @@ export const postService = {
       { $addToSet: { likes: meId }, $inc: { likeCount: 1 } },
       { new: true }
     );
-    if (!post) throw new ApiError(404, "Bài viết không tồn tại hoặc đã thích");
+    if (!post) {
+      // Co the post khong ton tai, hoac da like roi (idempotent - tra ve likeCount hien tai)
+      const existing = await Post.findOne({ _id: postId, deletedAt: null }).select(
+        "likeCount likes"
+      );
+      if (!existing) throw new ApiError(404, "Bài viết không tồn tại");
+      const alreadyLiked = existing.likes.some(
+        (id) => id.toString() === meId.toString()
+      );
+      if (alreadyLiked) {
+        // Idempotent: user da like roi -> tra ve trang thai hien tai, khong bao loi
+        return { liked: true, likeCount: existing.likeCount };
+      }
+      throw new ApiError(404, "Bài viết không tồn tại");
+    }
     await notificationService.push({
       recipientId: post.authorId,
       senderId: meId,
@@ -125,12 +144,33 @@ export const postService = {
       { $pull: { likes: meId }, $inc: { likeCount: -1 } },
       { new: true }
     );
-    if (!post) throw new ApiError(404, "Bài viết không tồn tại hoặc chưa thích");
+    if (!post) {
+      // Idempotent: chua like cung khong loi
+      const existing = await Post.findOne({ _id: postId, deletedAt: null }).select(
+        "likeCount likes"
+      );
+      if (!existing) throw new ApiError(404, "Bài viết không tồn tại");
+      const stillLiked = existing.likes.some(
+        (id) => id.toString() === meId.toString()
+      );
+      if (!stillLiked) {
+        return { liked: false, likeCount: existing.likeCount };
+      }
+      throw new ApiError(404, "Bài viết không tồn tại");
+    }
     return { liked: false, likeCount: Math.max(0, post.likeCount) };
   },
 
   // ================== NEWSFEED ==================
   async getFeed(meId, { cursor, limit = 20 } = {}) {
+    // Cache 60s: feed user thuong doi it, query friends+blocks+posts ton time
+    const cacheKey = `feed:user:${meId.toString()}:cursor:${cursor || "first"}:limit:${limit}`;
+    if (!cursor) {
+      // Cache chi ap dung cho trang dau (cursor=null)
+      const cached = await cache.get(cacheKey);
+      if (cached) return cached;
+    }
+
     // Bạn bè
     const friends = await Friendship.find({
       $or: [{ requester: meId }, { recipient: meId }],
@@ -174,7 +214,13 @@ export const postService = {
       populate: [{ path: "authorId", select: "username displayName avatarUrl" }],
     });
     const cleaned = items.map((p) => p.toClient ? p.toClient() : p);
-    return { items: cleaned, nextCursor };
+    const result = { items: cleaned, nextCursor };
+
+    // Cache 60s cho trang dau
+    if (!cursor) {
+      await cache.set(cacheKey, result, 60);
+    }
+    return result;
   },
 
   async listByUser(meId, targetId, { cursor, limit = 20 } = {}) {
