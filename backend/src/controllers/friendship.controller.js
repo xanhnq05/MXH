@@ -26,13 +26,28 @@ export const friendshipController = {
     res.json({ message: "Đã huỷ kết bạn" });
   }),
   list: asyncHandler(async (req, res) => {
-    res.json({ friends: await friendshipService.listFriends(req.user._id) });
+    res.json(
+      await friendshipService.listFriends(req.user._id, {
+        cursor: req.query.cursor,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+      })
+    );
   }),
   incoming: asyncHandler(async (req, res) => {
-    res.json({ requests: await friendshipService.listIncoming(req.user._id) });
+    res.json(
+      await friendshipService.listIncoming(req.user._id, {
+        cursor: req.query.cursor,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+      })
+    );
   }),
   sent: asyncHandler(async (req, res) => {
-    res.json({ requests: await friendshipService.listSent(req.user._id) });
+    res.json(
+      await friendshipService.listSent(req.user._id, {
+        cursor: req.query.cursor,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+      })
+    );
   }),
   suggestions: asyncHandler(async (req, res) => {
     const limit = Math.min(50, parseInt(req.query.limit) || 20);
@@ -52,6 +67,11 @@ export const blockController = {
     res.json({ message: "Đã bỏ chặn" });
   }),
   list: asyncHandler(async (req, res) => {
-    res.json({ blocks: await blockService.list(req.user._id) });
+    res.json(
+      await blockService.list(req.user._id, {
+        cursor: req.query.cursor,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+      })
+    );
   }),
 };

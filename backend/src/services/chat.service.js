@@ -7,6 +7,7 @@ import Friendship from "../models/Friendship.js";
 import { ApiError } from "../utils/ApiError.js";
 import { notificationService } from "./notification.service.js";
 import { emitToUser, emitToConversation } from "../libs/socket.js";
+import { paginate } from "../utils/pagination.js";
 
 const MIN_GROUP_MEMBERS = 3;
 const MAX_GROUP_MEMBERS = 100;
@@ -97,15 +98,23 @@ export const chatService = {
     return conv;
   },
 
-  async listForUser(meId) {
-    return Conversation.find({ "members.userId": meId })
-      .sort({ lastMessageAt: -1 })
-      .populate("members.userId", "username displayName avatarUrl isOnline lastSeen")
-      .populate({
-        path: "lastMessage",
-        select: "type content senderId isEncrypted createdAt",
-        populate: { path: "senderId", select: "username displayName" },
-      });
+  async listForUser(meId, { cursor, limit = 20 } = {}) {
+    const { items, nextCursor } = await paginate({
+      model: Conversation,
+      filter: { "members.userId": meId },
+      cursor,
+      limit,
+      sort: { lastMessageAt: -1, _id: -1 },
+      populate: [
+        { path: "members.userId", select: "username displayName avatarUrl isOnline lastSeen" },
+        {
+          path: "lastMessage",
+          select: "type content senderId isEncrypted createdAt",
+          populate: { path: "senderId", select: "username displayName" },
+        },
+      ],
+    });
+    return { items, nextCursor };
   },
 
   async getById(meId, convId) {

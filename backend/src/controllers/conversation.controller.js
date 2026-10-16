@@ -3,7 +3,12 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const conversationController = {
   list: asyncHandler(async (req, res) => {
-    res.json({ conversations: await chatService.listForUser(req.user._id) });
+    res.json(
+      await chatService.listForUser(req.user._id, {
+        cursor: req.query.cursor,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+      })
+    );
   }),
 
   getOrCreateDirect: asyncHandler(async (req, res) => {

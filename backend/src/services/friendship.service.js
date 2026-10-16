@@ -146,15 +146,23 @@ export const friendshipService = {
     return { success: true };
   },
 
-  async listFriends(meId) {
-    const list = await Friendship.find({
-      $or: [{ requester: meId }, { recipient: meId }],
-      status: "accepted",
-    })
-      .populate("requester", "username displayName avatarUrl")
-      .populate("recipient", "username displayName avatarUrl");
+  async listFriends(meId, { cursor, limit = 20 } = {}) {
+    const { paginate } = await import("../utils/pagination.js");
+    const { items, nextCursor } = await paginate({
+      model: Friendship,
+      filter: {
+        $or: [{ requester: meId }, { recipient: meId }],
+        status: "accepted",
+      },
+      cursor,
+      limit,
+      populate: [
+        { path: "requester", select: "username displayName avatarUrl" },
+        { path: "recipient", select: "username displayName avatarUrl" },
+      ],
+    });
 
-    return list.map((f) => {
+    const data = items.map((f) => {
       const other =
         f.requester._id.toString() === meId.toString()
           ? f.recipient
@@ -165,18 +173,29 @@ export const friendshipService = {
         since: f.updatedAt,
       };
     });
+    return { items: data, nextCursor };
   },
 
-  async listIncoming(meId) {
-    return Friendship.find({ recipient: meId, status: "pending" })
-      .populate("requester", "username displayName avatarUrl")
-      .sort({ createdAt: -1 });
+  async listIncoming(meId, { cursor, limit = 20 } = {}) {
+    const { paginate } = await import("../utils/pagination.js");
+    return paginate({
+      model: Friendship,
+      filter: { recipient: meId, status: "pending" },
+      cursor,
+      limit,
+      populate: [{ path: "requester", select: "username displayName avatarUrl" }],
+    });
   },
 
-  async listSent(meId) {
-    return Friendship.find({ requester: meId, status: "pending" })
-      .populate("recipient", "username displayName avatarUrl")
-      .sort({ createdAt: -1 });
+  async listSent(meId, { cursor, limit = 20 } = {}) {
+    const { paginate } = await import("../utils/pagination.js");
+    return paginate({
+      model: Friendship,
+      filter: { requester: meId, status: "pending" },
+      cursor,
+      limit,
+      populate: [{ path: "recipient", select: "username displayName avatarUrl" }],
+    });
   },
 
   /**

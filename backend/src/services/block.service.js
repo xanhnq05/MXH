@@ -30,10 +30,15 @@ export const blockService = {
     return { success: true };
   },
 
-  async list(meId) {
-    return Block.find({ blocker: meId }).populate(
-      "blocked",
-      "username displayName avatarUrl"
-    );
+  async list(meId, { cursor, limit = 20 } = {}) {
+    const { paginate } = await import("../utils/pagination.js");
+    const { items, nextCursor } = await paginate({
+      model: Block,
+      filter: { blocker: meId },
+      cursor,
+      limit,
+      populate: [{ path: "blocked", select: "username displayName avatarUrl" }],
+    });
+    return { items, nextCursor };
   },
 };

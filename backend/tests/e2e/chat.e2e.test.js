@@ -143,7 +143,8 @@ describe("Chat E2E", () => {
         .set("Authorization", `Bearer ${aliceToken}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.conversations.length).toBe(1);
+      expect(res.body.items.length).toBe(1);
+      expect(res.body.nextCursor).toBeNull();
     });
   });
 
