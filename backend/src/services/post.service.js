@@ -25,35 +25,51 @@ export const postService = {
       throw new ApiError(400, "Bài viết phải có nội dung hoặc media");
     }
     const media = [];
-    if (files && files.length) {
-      const uploaded = await uploadService.uploadMany({
-        files,
-        folder: "posts",
-        userId: authorId,
-      });
-      for (let i = 0; i < uploaded.length; i++) {
-        const f = uploaded[i];
-        const orig = files[i];
-        media.push({
-          type: orig.mimetype.startsWith("video") ? "video" : "image",
-          url: f.url,
-          storageKey: f.key,
-          size: f.size,
+    const uploadedKeys = []; // track de cleanup neu DB fail
+    try {
+      if (files && files.length) {
+        const uploaded = await uploadService.uploadMany({
+          files,
+          folder: "posts",
+          userId: authorId,
         });
+        for (let i = 0; i < uploaded.length; i++) {
+          const f = uploaded[i];
+          const orig = files[i];
+          uploadedKeys.push(f.key);
+          media.push({
+            type: orig.mimetype.startsWith("video") ? "video" : "image",
+            url: f.url,
+            storageKey: f.key,
+            size: f.size,
+          });
+        }
       }
+      const post = await Post.create({
+        authorId,
+        content: content || "",
+        media,
+        visibility: visibility || "public",
+      });
+      await post.populate("authorId", "username displayName avatarUrl");
+
+      // Invalidate feed cache cua author (de bai moi xuat hien ngay)
+      await cache.delPattern(`feed:user:${authorId.toString()}:*`);
+
+      return post.toClient();
+    } catch (err) {
+      // Cleanup: neu DB create fail, xoa file da upload (orphan)
+      if (uploadedKeys.length) {
+        console.warn(
+          `[post.create] DB fail, cleaning up ${uploadedKeys.length} uploaded file(s):`,
+          err.message
+        );
+        await Promise.allSettled(
+          uploadedKeys.map((k) => uploadService.deleteFile(k))
+        );
+      }
+      throw err;
     }
-    const post = await Post.create({
-      authorId,
-      content: content || "",
-      media,
-      visibility: visibility || "public",
-    });
-    await post.populate("authorId", "username displayName avatarUrl");
-
-    // Invalidate feed cache cua author (de bai moi xuat hien ngay)
-    await cache.delPattern(`feed:user:${authorId.toString()}:*`);
-
-    return post.toClient();
   },
 
   async getById(meId, postId) {
