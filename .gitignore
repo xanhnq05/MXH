@@ -49,3 +49,9 @@ Thumbs.db
 tmp/
 .temp/
 *.tsbuildinfo
+
+# ===== Local prompt files (khong commit, chi dung de paste vao Cursor) =====
+update1.md
+update2.md
+update*.md
+!docs/**/*.md
