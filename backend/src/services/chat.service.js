@@ -10,8 +10,26 @@ import { emitToUser, emitToConversation } from "../libs/socket.js";
 import { paginate } from "../utils/pagination.js";
 import cache from "../libs/cache.js";
 
-const MIN_GROUP_MEMBERS = 3;
-const MAX_GROUP_MEMBERS = 100;
+const MIN_GROUP_MEMBERS = 1;
+const MAX_GROUP_MEMBERS = 50;
+
+// Sinh slug base62 8 ký tự, đảm bảo unique trong DB
+const generateJoinLink = async () => {
+  const alphabet =
+    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  const len = 8;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let s = "";
+    for (let i = 0; i < len; i++) {
+      s += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    // Check collision nhanh
+    const exists = await Conversation.findOne({ joinLink: s }).lean();
+    if (!exists) return s;
+  }
+  // Fallback: dùng timestamp hex
+  return Date.now().toString(36).slice(-8);
+};
 
 const assertNotBlocked = async (a, b) => {
   const blocked = await Block.findOne({
@@ -77,9 +95,11 @@ export const chatService = {
   },
 
   /** Tạo nhóm chat */
-  async createGroup(meId, { name, memberIds = [] }) {
+  async createGroup(meId, { name, memberIds = [], joinType = "closed" } = {}) {
     if (!name || name.trim().length === 0)
       throw new ApiError(400, "Tên nhóm không được để trống");
+    if (!["open", "closed"].includes(joinType))
+      throw new ApiError(400, "joinType không hợp lệ");
 
     const allIds = Array.from(new Set([meId.toString(), ...memberIds.map(String)]));
     if (allIds.length < MIN_GROUP_MEMBERS)
@@ -91,9 +111,14 @@ export const chatService = {
     if (users.length !== allIds.length)
       throw new ApiError(404, "Có thành viên không tồn tại");
 
+    // Sinh joinLink chỉ khi nhóm mở
+    const joinLink = joinType === "open" ? await generateJoinLink() : null;
+
     const conv = await Conversation.create({
       type: "group",
       name: name.trim(),
+      joinType,
+      joinLink,
       members: allIds.map((id) =>
         buildDirectMember(
           id,
@@ -115,6 +140,34 @@ export const chatService = {
       }
     }
 
+    return conv;
+  },
+
+  /**
+   * Vào nhóm mở qua link. Trả về conversation nếu thành công.
+   * - Chỉ nhóm joinType=open mới join được
+   * - Không cần là bạn bè
+   * - Không vượt quá MAX_GROUP_MEMBERS
+   */
+  async joinByLink(meId, joinLink) {
+    if (!joinLink || !String(joinLink).trim())
+      throw new ApiError(400, "Thiếu link mời");
+    const conv = await Conversation.findOne({ joinLink: String(joinLink).trim() });
+    if (!conv) throw new ApiError(404, "Link mời không hợp lệ");
+    if (conv.type !== "group")
+      throw new ApiError(400, "Không phải nhóm");
+    if (conv.joinType !== "open")
+      throw new ApiError(403, "Nhóm này không cho phép vào qua link");
+    if (conv.members.some((m) => m.userId.toString() === meId.toString()))
+      throw new ApiError(409, "Bạn đã là thành viên");
+    if (conv.members.length >= MAX_GROUP_MEMBERS)
+      throw new ApiError(400, `Nhóm đã đầy (tối đa ${MAX_GROUP_MEMBERS} thành viên)`);
+
+    conv.members.push(buildDirectMember(meId, "member"));
+    conv.lastMessageAt = new Date();
+    await conv.save();
+    await invalidateConvCacheForMembers(conv);
+    emitToConversation(conv._id.toString(), "conversation:updated", conv);
     return conv;
   },
 

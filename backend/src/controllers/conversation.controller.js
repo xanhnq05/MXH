@@ -30,6 +30,13 @@ export const conversationController = {
     res.json({ conversation: await chatService.getById(req.user._id, req.params.id) });
   }),
 
+  joinByLink: asyncHandler(async (req, res) => {
+    const { joinLink } = req.body;
+    res.json({
+      conversation: await chatService.joinByLink(req.user._id, joinLink),
+    });
+  }),
+
   updateGroup: asyncHandler(async (req, res) => {
     res.json({
       conversation: await chatService.updateGroup(

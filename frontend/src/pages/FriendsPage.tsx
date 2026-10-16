@@ -4,7 +4,7 @@
 //   - Mỗi tab là 1 list dọc: avatar + tên + lý do gợi ý + nút hành động
 //   - 3-dot menu ở mỗi row: Xem hồ sơ, Nhắn tin, Hủy kết bạn
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useLocation } from "react-router";
 import {
   UserPlus,
   UserCheck,
@@ -34,7 +34,9 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { friendshipService } from "@/services/other.service";
+import { getSocket } from "@/lib/socket";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/providers/ConfirmDialogProvider";
 import { cn } from "@/lib/utils";
 
 interface FriendItem {
@@ -98,7 +100,12 @@ const getInitials = (name?: string) =>
 
 const FriendsPage = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("all");
+  const location = useLocation();
+  const { confirm } = useConfirm();
+  const initialTab = (location.state as any)?.tab || "all";
+  const highlightUserId = (location.state as any)?.highlight || null;
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [highlightedId, setHighlightedId] = useState<string | null>(highlightUserId);
   const [friends, setFriends] = useState<FriendItem[]>([]);
   const [incoming, setIncoming] = useState<FriendItem[]>([]);
   const [sent, setSent] = useState<FriendItem[]>([]);
@@ -108,23 +115,47 @@ const FriendsPage = () => {
   // Tracking id đang pending (để disable nút trong lúc gọi API)
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
+  // Cập nhật tab khi navigate với state mới
+  useEffect(() => {
+    const s = location.state as any;
+    if (s?.tab) {
+      setActiveTab(s.tab);
+    }
+    if (s?.highlight) {
+      setHighlightedId(s.highlight);
+      // Tự động clear highlight sau 3s
+      setTimeout(() => setHighlightedId(null), 3000);
+    }
+  }, [location.state]);
+
+  // Auto scroll tới user được highlight (từ notification click)
+  useEffect(() => {
+    if (!highlightedId) return;
+    const el = document.getElementById(`friend-${highlightedId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightedId, activeTab, suggestions, friends, incoming, sent]);
+
   const load = async () => {
     setLoading(true);
     try {
       const [f, i, s, sg] = await Promise.all([
-        friendshipService.list(),
-        friendshipService.incoming(),
-        friendshipService.sent(),
+        friendshipService.list().catch(() => []),
+        friendshipService.incoming().catch(() => []),
+        friendshipService.sent().catch(() => []),
         friendshipService.suggestions(20).catch((e) => {
           // 429 = rate limit, suggestions khong quan trong, bo qua
-          if (e?.response?.status !== 429) throw e;
+          if (e?.response?.status !== 429) {
+            console.warn("friends suggestions failed:", e?.message);
+          }
           return [];
         }),
       ]);
-      setFriends(f);
-      setIncoming(i);
-      setSent(s);
-      setSuggestions(sg);
+      setFriends(Array.isArray(f) ? f : []);
+      setIncoming(Array.isArray(i) ? i : []);
+      setSent(Array.isArray(s) ? s : []);
+      setSuggestions(Array.isArray(sg) ? sg : []);
     } catch (e: any) {
       console.error("Load friends error:", e);
       // Hien thi toast neu bi 429 de user biet ly do
@@ -140,6 +171,29 @@ const FriendsPage = () => {
 
   useEffect(() => {
     load();
+  }, []);
+
+  // Realtime: khi có friend_request/accept/cancel → reload danh sách
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+    const onNotif = (n: any) => {
+      if (!n) return;
+      if (
+        n.type === "friend_request" ||
+        n.type === "friend_accept" ||
+        n.type === "friend_reject" ||
+        n.type === "friend_cancel"
+      ) {
+        // Reload lại các list để đảm bảo đồng bộ
+        load();
+      }
+    };
+    socket.on("notification:new", onNotif);
+    return () => {
+      socket.off("notification:new", onNotif);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const markPending = (id: string, on: boolean) => {
@@ -158,7 +212,7 @@ const FriendsPage = () => {
       await friendshipService.sendRequest(userId);
       toast.success("Đã gửi lời mời kết bạn");
       // Move từ suggestions → sent
-      setSuggestions((prev) => prev.filter((s) => s.user._id !== userId));
+      setSuggestions((prev) => (Array.isArray(prev) ? prev : []).filter((s) => s.user._id !== userId));
       load();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || "Lỗi");
@@ -207,7 +261,13 @@ const FriendsPage = () => {
   };
 
   const handleUnfriend = async (userId: string) => {
-    if (!confirm("Bạn có chắc muốn hủy kết bạn?")) return;
+    const ok = await confirm({
+      title: "Huỷ kết bạn?",
+      message: "Bạn sẽ không còn thấy nhau trong danh sách bạn bè và không thể nhắn tin.",
+      confirmLabel: "Huỷ kết bạn",
+      variant: "warning",
+    });
+    if (!ok) return;
     markPending(userId, true);
     try {
       await friendshipService.unfriend(userId);
@@ -234,76 +294,81 @@ const FriendsPage = () => {
     name?.toLowerCase().includes(searchQ.toLowerCase()) ||
     name?.toLowerCase().includes(searchQ.toLowerCase());
 
-  const filteredFriends = friends.filter((f) =>
+  const safeFriends = Array.isArray(friends) ? friends : [];
+  const safeIncoming = Array.isArray(incoming) ? incoming : [];
+  const safeSent = Array.isArray(sent) ? sent : [];
+  const safeSuggestions = Array.isArray(suggestions) ? suggestions : [];
+
+  const filteredFriends = safeFriends.filter((f) =>
     filterByQuery(f.friend?.displayName)
   );
-  const filteredIncoming = incoming.filter((r) =>
+  const filteredIncoming = safeIncoming.filter((r) =>
     filterByQuery(r.requester?.displayName)
   );
-  const filteredSent = sent.filter((r) =>
+  const filteredSent = safeSent.filter((r) =>
     filterByQuery(r.recipient?.displayName)
   );
-  const filteredSuggestions = suggestions.filter((s) =>
+  const filteredSuggestions = safeSuggestions.filter((s) =>
     filterByQuery(s.user?.displayName)
   );
 
   // ============== RENDER ==============
   return (
-    <div className="h-full overflow-y-auto bg-orange-50/30">
+    <div className="h-full overflow-y-auto bg-orange-50/30 dark:bg-slate-950">
       <div className="max-w-3xl mx-auto p-4 sm:p-6">
         {/* Header */}
         <div className="mb-5">
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Bạn bè</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Bạn bè</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Quản lý bạn bè, lời mời và gợi ý kết bạn
           </p>
         </div>
 
         {/* Search */}
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
           <input
             type="text"
             value={searchQ}
             onChange={(e) => setSearchQ(e.target.value)}
             placeholder="Tìm theo tên, username, email..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-orange-200 bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-100 outline-none text-sm transition"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-orange-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/30 outline-none text-sm transition placeholder:text-slate-400 dark:placeholder:text-slate-500"
           />
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full bg-white border border-orange-100 p-1 rounded-2xl mb-4 grid grid-cols-4 gap-1">
+          <TabsList className="w-full bg-white dark:bg-slate-800 border border-orange-100 dark:border-slate-700 p-1 rounded-2xl mb-4 grid grid-cols-4 gap-1">
             <TabsTrigger
               value="all"
               className={cn(
-                "tab-active-gradient rounded-xl text-sm font-medium py-2 transition-all text-slate-500 hover:bg-orange-50"
+                "tab-active-gradient rounded-xl text-sm font-medium py-2 transition-all text-slate-500 dark:text-slate-400 hover:bg-orange-50 dark:hover:bg-slate-700"
               )}
             >
-              Tất cả ({friends.length})
+              Tất cả ({safeFriends.length})
             </TabsTrigger>
             <TabsTrigger
               value="suggestions"
               className={cn(
-                "tab-active-gradient rounded-xl text-sm font-medium py-2 transition-all text-slate-500 hover:bg-orange-50"
+                "tab-active-gradient rounded-xl text-sm font-medium py-2 transition-all text-slate-500 dark:text-slate-400 hover:bg-orange-50 dark:hover:bg-slate-700"
               )}
             >
-              Gợi ý ({suggestions.length})
+              Gợi ý ({safeSuggestions.length})
             </TabsTrigger>
             <TabsTrigger
               value="incoming"
               className={cn(
-                "tab-active-gradient rounded-xl text-sm font-medium py-2 transition-all text-slate-500 hover:bg-orange-50"
+                "tab-active-gradient rounded-xl text-sm font-medium py-2 transition-all text-slate-500 dark:text-slate-400 hover:bg-orange-50 dark:hover:bg-slate-700"
               )}
             >
-              Lời mời ({incoming.length})
+              Lời mời ({safeIncoming.length})
             </TabsTrigger>
             <TabsTrigger
               value="sent"
               className={cn(
-                "tab-active-gradient rounded-xl text-sm font-medium py-2 transition-all text-slate-500 hover:bg-orange-50"
+                "tab-active-gradient rounded-xl text-sm font-medium py-2 transition-all text-slate-500 dark:text-slate-400 hover:bg-orange-50 dark:hover:bg-slate-700"
               )}
             >
-              Đã gửi ({sent.length})
+              Đã gửi ({safeSent.length})
             </TabsTrigger>
           </TabsList>
 
@@ -370,6 +435,7 @@ const FriendsPage = () => {
                 <FriendRow
                   key={s.user._id}
                   user={s.user}
+                  highlighted={highlightedId === s.user._id}
                   meta={
                     <span className="inline-flex items-center gap-1 text-slate-500">
                       <SuggestionIcon type={s.reasonType} /> {s.reason}
@@ -405,6 +471,7 @@ const FriendsPage = () => {
                 <FriendRow
                   key={req._id}
                   user={req.requester}
+                  highlighted={highlightedId === req.requester._id}
                   meta={
                     <span className="inline-flex items-center gap-1 text-slate-500">
                       <Clock className="h-3 w-3" /> {formatRelative(req.createdAt)}
@@ -425,7 +492,7 @@ const FriendsPage = () => {
                         variant="outline"
                         disabled={pendingIds.has(req.requester._id)}
                         onClick={() => handleReject(req.requester._id)}
-                        className="border-slate-200 hover:bg-slate-50"
+                        className="border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-900 dark:text-slate-200"
                       >
                         <X className="h-4 w-4" />
                       </Button>
@@ -462,7 +529,7 @@ const FriendsPage = () => {
                       variant="outline"
                       disabled={pendingIds.has(req.recipient._id)}
                       onClick={() => handleCancel(req.recipient._id)}
-                      className="border-orange-200 text-orange-600 hover:bg-orange-50"
+                      className="border-orange-200 dark:border-slate-700 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-slate-800 dark:bg-slate-900"
                     >
                       Huỷ yêu cầu
                     </Button>
@@ -482,17 +549,22 @@ const FriendRow = ({
   user,
   meta,
   actions,
+  highlighted,
 }: {
   user: any;
   meta?: React.ReactNode;
   actions?: React.ReactNode;
+  highlighted?: boolean;
 }) => {
   if (!user) return null;
   return (
     <div
+      id={`friend-${user._id}`}
       className={cn(
-        "flex items-center gap-3 p-3 sm:p-4 bg-white rounded-2xl border border-orange-100",
-        "hover:border-orange-200 hover:shadow-sm transition-all"
+        "flex items-center gap-3 p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-2xl border border-orange-100 dark:border-slate-800 transition-all",
+        highlighted
+          ? "border-orange-500 ring-2 ring-orange-200 shadow-md"
+          : "border-orange-100 hover:border-orange-200 hover:shadow-sm"
       )}
     >
       <Link to={`/profile/${user._id}`} className="shrink-0">
@@ -535,13 +607,13 @@ const EmptyHint = ({
     ) : (
       <>
         {icon && (
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-orange-50 flex items-center justify-center text-orange-400 mb-3">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-orange-50 dark:bg-orange-500/20 flex items-center justify-center text-orange-400 mb-3">
             {icon}
           </div>
         )}
-        {title && <p className="font-semibold text-slate-900">{title}</p>}
+        {title && <p className="font-semibold text-slate-900 dark:text-white">{title}</p>}
         {description && (
-          <p className="text-sm text-slate-500 mt-1 max-w-xs mx-auto">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs mx-auto">
             {description}
           </p>
         )}

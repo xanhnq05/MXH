@@ -6,11 +6,13 @@ export const friendshipService = {
   reject: (userId: string) => api.post("/friends/reject", { userId }),
   cancel: (userId: string) => api.post("/friends/cancel", { userId }),
   unfriend: (userId: string) => api.delete(`/friends/${userId}`),
-  list: () => api.get("/friends").then((r) => r.data.friends),
-  incoming: () => api.get("/friends/requests/incoming").then((r) => r.data.requests),
-  sent: () => api.get("/friends/requests/sent").then((r) => r.data.requests),
+  list: () => api.get("/friends").then((r) => r.data.items || r.data.friends || []),
+  incoming: () =>
+    api.get("/friends/requests/incoming").then((r) => r.data.items || r.data.requests || []),
+  sent: () =>
+    api.get("/friends/requests/sent").then((r) => r.data.items || r.data.requests || []),
   suggestions: (limit = 20) =>
-    api.get(`/friends/suggestions?limit=${limit}`).then((r) => r.data.suggestions),
+    api.get(`/friends/suggestions?limit=${limit}`).then((r) => r.data.suggestions || []),
 };
 
 export const blockService = {

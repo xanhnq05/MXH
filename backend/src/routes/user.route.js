@@ -31,10 +31,13 @@ router.post(
   uploadMiddleware.single("file"),
   userController.uploadCover
 );
+router.delete("/me/cover", userController.removeCover);
+router.delete("/me/avatar", userController.removeAvatar);
 router.post("/me/e2ee-keys", validate(setE2EEKeysSchema), userController.setE2EEKeys);
 router.delete("/me", userController.deleteAccount);
 
 router.get("/search", validate(searchUserSchema, "query"), userController.search);
+router.get("/:id/presence", userController.presence);
 router.get("/:id", userController.getById);
 
 export default router;

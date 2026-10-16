@@ -1,37 +1,22 @@
-# ===== MXH Backend .dockerignore =====
-# Loại trừ khi copy vào Docker build context
-
 node_modules
 npm-debug.log
-
-# Test
-tests
-coverage
-.nyc_output
-junit.xml
-
-# Env (không commit, không copy)
 .env
 .env.local
 .env.*.local
-
-# Editor
-.vscode
-.idea
-*.swp
-*.swo
-.DS_Store
-
-# Git
 .git
 .gitignore
-
-# Docs
-*.md
-docs
-update*.md
-
-# Docker
-Dockerfile
-docker-compose.yml
 .dockerignore
+Dockerfile
+.docker
+coverage
+.vscode
+.idea
+.DS_Store
+*.log
+tests
+__tests__
+*.test.js
+*.spec.js
+.claude
+.cursor
+docs

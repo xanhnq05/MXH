@@ -9,6 +9,8 @@ export interface Post {
   likeCount: number;
   commentCount: number;
   shareCount: number;
+  tags: string[];
+  isLiked: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -28,7 +30,12 @@ export interface Comment {
   postId: string;
   author: User | string;
   parentId: string | null;
+  type: "text" | "sticker" | "gif";
   content: string;
+  stickerId: string | null;
+  stickerUrl: string | null;
+  gifId: string | null;
+  gifUrl: string | null;
   likeCount: number;
   createdAt: string;
   updatedAt: string;

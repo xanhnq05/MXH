@@ -8,14 +8,18 @@ import { notificationService } from "./notification.service.js";
 import { paginate } from "../utils/pagination.js";
 import { emitToUser } from "../libs/socket.js";
 import cache from "../libs/cache.js";
+import { assertNotBlocked } from "../utils/blockGuard.js";
 
 export const commentService = {
-  async create(meId, postId, { content, parentId }) {
+  async create(meId, postId, payload) {
     const post = await Post.findOne({ _id: postId, deletedAt: null });
     if (!post) throw new ApiError(404, "Bài viết không tồn tại");
 
-    if (parentId) {
-      const parent = await Comment.findById(parentId);
+    // Block guard: cả 2 chiều
+    await assertNotBlocked(meId, post.authorId, { strict: true });
+
+    if (payload.parentId) {
+      const parent = await Comment.findById(payload.parentId);
       if (!parent) throw new ApiError(404, "Bình luận cha không tồn tại");
       if (parent.postId.toString() !== postId)
         throw new ApiError(400, "Bình luận cha không thuộc bài viết này");
@@ -24,8 +28,13 @@ export const commentService = {
     const comment = await Comment.create({
       postId,
       authorId: meId,
-      parentId: parentId || null,
-      content,
+      parentId: payload.parentId || null,
+      type: payload.type || "text",
+      content: payload.content || "",
+      stickerId: payload.stickerId || null,
+      stickerUrl: payload.stickerUrl || null,
+      gifId: payload.gifId || null,
+      gifUrl: payload.gifUrl || null,
     });
 
     post.commentCount += 1;
@@ -43,8 +52,8 @@ export const commentService = {
       comment: comment.toObject ? comment.toObject() : comment,
       commentCount: post.commentCount,
     });
-    if (parentId) {
-      const parent = await Comment.findById(parentId);
+    if (payload.parentId) {
+      const parent = await Comment.findById(payload.parentId);
       if (parent && parent.authorId.toString() !== meId.toString()) {
         await notificationService.push({
           recipientId: parent.authorId,
@@ -103,6 +112,8 @@ export const commentService = {
     if (!c || c.deletedAt) throw new ApiError(404, "Bình luận không tồn tại");
     if (c.authorId.toString() !== meId.toString())
       throw new ApiError(403, "Không có quyền sửa");
+    if (c.type !== "text")
+      throw new ApiError(400, "Chỉ sửa được bình luận dạng text");
     c.content = content;
     await c.save();
     await c.populate("authorId", "username displayName avatarUrl");

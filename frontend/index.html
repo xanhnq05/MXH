@@ -1,10 +1,28 @@
 <!doctype html>
-<html lang="vi">
+<html lang="vi" class="">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ff6b35" />
     <title>GreenX</title>
+    <script>
+      // Áp dụng theme ngay từ đầu để tránh flash of light/dark
+      (function () {
+        try {
+          var theme = localStorage.getItem("theme") || "system";
+          var mode =
+            theme === "system"
+              ? window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light"
+              : theme;
+          if (mode === "dark") {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body class="bg-background text-foreground">
     <div id="root"></div>

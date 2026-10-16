@@ -9,6 +9,11 @@ export const createDirectSchema = z.object({
 export const createGroupSchema = z.object({
   name: z.string().min(1).max(100),
   memberIds: z.array(objectId).default([]),
+  joinType: z.enum(["open", "closed"]).default("closed"),
+});
+
+export const joinByLinkSchema = z.object({
+  joinLink: z.string().min(4).max(64),
 });
 
 export const updateGroupSchema = z.object({
@@ -51,6 +56,9 @@ export const sendMessageSchema = z.object({
   duration: z.number().optional(),
   stickerId: z.string().optional(),
   stickerUrl: z.string().optional(),
+  // share_post: id + url của post được chia sẻ
+  postId: z.string().optional(),
+  postUrl: z.string().optional(),
   replyTo: z.string().optional(),
   isEncrypted: z.boolean().optional(),
   iv: z.string().optional(),

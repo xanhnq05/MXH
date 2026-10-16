@@ -2,13 +2,14 @@
 // Bố cục: InboxList trái (ẩn mobile khi mở hội thoại) + ChatPanel phải.
 // Header: avatar, tên, last seen, online dot, overflow menu.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { chatService } from "@/services/chat.service";
 import { InboxList } from "@/components/chat/InboxList";
+import { CreateGroupModal } from "@/components/chat/CreateGroupModal";
 import { ChatHeader } from "@/components/chat/ChatHeader";
 import { MessageList } from "@/components/chat/MessageList";
 import { MessageComposer } from "@/components/chat/MessageComposer";
@@ -32,6 +33,9 @@ const ChatPage = () => {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [searchQ, setSearchQ] = useState("");
   const [showSidebar, setShowSidebar] = useState(!conversationId);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  // Track last messageId đã markRead để tránh gọi lại
+  const markReadTimerRef = useRef<{ messageId?: string } | null>(null);
 
   // Sync sidebar visibility with route
   useEffect(() => {
@@ -46,10 +50,44 @@ const ChatPage = () => {
     if (conversationId) {
       setActiveConversation(conversationId);
       fetchMessages(conversationId);
+      // Join socket room để nhận message:new của conversation này
+      // (kể cả message do chính mình gửi)
+      (async () => {
+        const { getSocket } = await import("@/lib/socket");
+        const s = getSocket();
+        if (s?.connected) s.emit("conversation:join", conversationId);
+      })();
     }
   }, [conversationId, setActiveConversation, fetchMessages]);
 
-  const activeConv = conversations.find((c) => c._id === conversationId);
+  // Auto markRead khi mở conversation: gọi server để broadcast message:read
+  // (chỉ khi đã load xong messages và có lastMessageId)
+  useEffect(() => {
+    if (!conversationId) return;
+    const list = messages[conversationId];
+    if (!list || list.length === 0) return;
+    const last = list[list.length - 1];
+    if (!last?._id) return;
+    // Tránh gọi lại khi message id không đổi
+    if ((markReadTimerRef as any).current?.messageId === last._id) return;
+    // Bỏ qua nếu last message là của mình (không cần mark read cho mình)
+    const myId = user?._id;
+    const senderId =
+      typeof last.senderId === "object" ? (last.senderId as any)._id : last.senderId;
+    if (senderId === myId) {
+      (markReadTimerRef as any).current = { messageId: last._id };
+      return;
+    }
+    // Debounce 500ms
+    const timer = setTimeout(() => {
+      useChatStore.getState().markAllRead(conversationId, last._id);
+      (markReadTimerRef as any).current = { messageId: last._id };
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [conversationId, messages, user?._id]);
+
+  const safeConversations = Array.isArray(conversations) ? conversations : [];
+  const activeConv = safeConversations.find((c) => c._id === conversationId);
   const convMessages = conversationId ? messages[conversationId] || [] : [];
 
   const handleSend = useCallback(
@@ -80,15 +118,8 @@ const ChatPage = () => {
     [conversationId, messages]
   );
 
-  const handleCreateGroup = async () => {
-    const name = window.prompt("Tên nhóm:");
-    if (!name) return;
-    try {
-      const c = await chatService.createGroup(name, []);
-      navigate(`/chat/${c._id}`);
-    } catch {
-      toast.error("Tạo nhóm thất bại");
-    }
+  const handleCreateGroup = () => {
+    setCreateGroupOpen(true);
   };
 
   return (
@@ -134,6 +165,7 @@ const ChatPage = () => {
               loading={loadingMessages}
               onReply={setReplyTo}
               onDeleted={handleDeleteMessage}
+              conversation={activeConv}
             />
             <MessageComposer
               conversationId={conversationId}
@@ -156,6 +188,15 @@ const ChatPage = () => {
           </div>
         )}
       </main>
+
+      <CreateGroupModal
+        open={createGroupOpen}
+        onOpenChange={setCreateGroupOpen}
+        onCreated={(id) => {
+          fetchConversations();
+          navigate(`/chat/${id}`);
+        }}
+      />
     </div>
   );
 };

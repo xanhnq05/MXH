@@ -24,6 +24,7 @@ import {
   Reply,
   FileText,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -96,14 +97,15 @@ export const MessageComposer = ({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLInputElement>(null);
 
-  const { suggestions: gifs, loading: gifLoading } = useGifSuggest(text);
+  const { suggestions: gifs, loading: gifLoading, clear: clearGifs } = useGifSuggest(text);
   const recorder = useRecorder();
 
   // Reset pendingFile khi đổi conversation
   useEffect(() => {
     setPendingFile(null);
     setText("");
-  }, [conversationId]);
+    clearGifs();
+  }, [conversationId, clearGifs]);
 
   const handleSendText = useCallback(async () => {
     if (!text.trim() || sending) return;
@@ -116,13 +118,14 @@ export const MessageComposer = ({
         ...(replyId && { replyTo: replyId }),
       });
       setText("");
+      clearGifs();
       onCancelReply();
     } catch (e: any) {
       toast.error(e?.message || "Gửi thất bại");
     } finally {
       setSending(false);
     }
-  }, [text, sending, onSend, replyTo, onCancelReply]);
+  }, [text, sending, onSend, replyTo, onCancelReply, clearGifs]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (isComposingRef.current) return;
@@ -153,6 +156,9 @@ export const MessageComposer = ({
         stickerUrl: s.url,
         ...(replyId && { replyTo: replyId }),
       });
+      // Xóa text + ẩn suggestion giống gửi ảnh
+      setText("");
+      clearGifs();
       onCancelReply();
     } catch (e: any) {
       toast.error(e?.message || "Gửi sticker thất bại");
@@ -161,7 +167,7 @@ export const MessageComposer = ({
     }
   };
 
-  const handleGifClick = async (gif: { id: string; url: string; tags: string[] }) => {
+  const handleGifClick = async (gif: { id: string; url: string; tags: string[]; mediaType?: string; name?: string }) => {
     if (sending) return;
     setSending(true);
     const replyId = replyTo?._id;
@@ -170,10 +176,12 @@ export const MessageComposer = ({
         type: "gif",
         stickerId: gif.id,
         stickerUrl: gif.url,
-        content: gif.tags[0] || "",
+        content: gif.name || gif.tags[0] || "",
         ...(replyId && { replyTo: replyId }),
       });
+      // Xóa text + ẩn suggestion ngay lập tức (giống gửi ảnh)
       setText("");
+      clearGifs();
       onCancelReply();
     } catch (e: any) {
       toast.error(e?.message || "Gửi GIF thất bại");
@@ -276,7 +284,7 @@ export const MessageComposer = ({
   return (
     <div
       className={cn(
-        "border-t bg-background",
+        "border-t border-slate-200 dark:border-slate-800 bg-background dark:bg-slate-900",
         dragOver && "ring-2 ring-primary ring-inset"
       )}
       onDrop={handleDrop}
@@ -320,7 +328,7 @@ export const MessageComposer = ({
 
       {/* Pending file preview */}
       {pendingFile && (
-        <div className="flex items-center gap-3 px-3 py-2 bg-muted/40 border-b">
+        <div className="flex items-center gap-3 px-3 py-2 bg-muted/40 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700">
           <FileText className="h-5 w-5 text-muted-foreground" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{pendingFile.name}</p>
@@ -348,25 +356,41 @@ export const MessageComposer = ({
         </div>
       )}
 
-      {/* GIF suggestions horizontal */}
-      {gifs.length > 0 && (
+      {/* Sticker + GIF suggestions horizontal */}
+      {(gifs.length > 0 || gifLoading) && text.trim().length >= 1 && (
         <div className="border-t bg-muted/30 p-2 overflow-x-auto">
+          <div className="flex items-center gap-1 mb-1.5 text-[10px] text-muted-foreground">
+            <Sparkles className="h-3 w-3" />
+            <span>
+              Gợi ý {gifs.length > 0 ? `${gifs.length}` : ""} cho "{text.trim()}"
+            </span>
+          </div>
           <div className="flex gap-2">
-            {gifs.slice(0, 8).map((g) => (
+            {gifs.slice(0, 12).map((g) => (
               <button
                 key={g.id}
                 type="button"
                 onClick={() => handleGifClick(g)}
                 disabled={sending}
-                className="relative h-16 w-16 md:h-20 md:w-20 rounded-md overflow-hidden shrink-0 hover:opacity-80 hover:ring-2 ring-primary transition-all disabled:opacity-50"
-                title={g.tags?.[0] || "GIF"}
+                className="relative h-16 w-16 md:h-20 md:w-20 rounded-md overflow-hidden shrink-0 hover:opacity-80 hover:ring-2 ring-primary transition-all disabled:opacity-50 bg-white dark:bg-slate-800 border dark:border-slate-700"
+                title={g.name || g.tags?.[0] || "Media"}
               >
                 <img
                   src={g.url}
-                  alt={g.tags?.[0] || "GIF"}
-                  className="h-full w-full object-cover"
+                  alt={g.name || g.tags?.[0] || "Media"}
+                  className="h-full w-full object-contain"
                   loading="lazy"
                 />
+                {g.mediaType === "sticker" && (
+                  <span className="absolute top-0 right-0 text-[8px] bg-primary text-primary-foreground px-1 rounded-bl">
+                    S
+                  </span>
+                )}
+                {g.mediaType === "gif" && (
+                  <span className="absolute top-0 right-0 text-[8px] bg-pink-500 text-white px-1 rounded-bl">
+                    GIF
+                  </span>
+                )}
               </button>
             ))}
             {gifLoading && (

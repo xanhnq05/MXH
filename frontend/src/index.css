@@ -1,6 +1,27 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Animation nảy nhẹ cho bubble khi click (tin nhắn của mình) */
+@keyframes bubble-bounce {
+  0% { transform: translateY(0) scale(1); }
+  30% { transform: translateY(-6px) scale(1.03); }
+  60% { transform: translateY(2px) scale(0.99); }
+  100% { transform: translateY(0) scale(1); }
+}
+.animate-bubble-bounce {
+  animation: bubble-bounce 0.4s ease-out;
+}
+
+/* Flash highlight khi scroll tới message gốc (reply) */
+@keyframes mxh-flash-highlight {
+  0%, 100% { background-color: transparent; }
+  20%, 60% { background-color: hsl(48 96% 89% / 0.6); }
+}
+.mxh-flash-highlight {
+  animation: mxh-flash-highlight 1.4s ease-out;
+  border-radius: 0.5rem;
+}
+
 @theme inline {
   /* GreenX theme: chủ đạo cam #FF6B35 + cam sáng #FF9F43 */
   --color-background: hsl(0 0% 100%);
@@ -71,6 +92,108 @@
     background-color: hsl(220 25% 9%);
     color: hsl(28 30% 96%);
   }
+
+  /* === Dark mode overrides cho các class hardcoded thường gặp === */
+  /* Background: white -> dark slate */
+  .dark .bg-white { background-color: hsl(220 22% 12%) !important; }
+  .dark .bg-slate-50 { background-color: hsl(220 25% 9%) !important; }
+  .dark .bg-slate-100 { background-color: hsl(220 22% 15%) !important; }
+  .dark .bg-slate-200 { background-color: hsl(220 22% 18%) !important; }
+  .dark .bg-slate-300 { background-color: hsl(220 18% 22%) !important; }
+
+  /* Background: orange shades -> dark orange tints */
+  .dark .bg-orange-50 { background-color: hsl(220 25% 14%) !important; }
+  .dark .bg-orange-50\/30 { background-color: hsl(220 25% 9% / 0.5) !important; }
+  .dark .bg-orange-50\/50 { background-color: hsl(220 25% 12% / 0.5) !important; }
+  .dark .bg-orange-100 { background-color: hsl(16 40% 18%) !important; }
+  .dark .bg-orange-200 { background-color: hsl(16 45% 22%) !important; }
+
+  /* Background: notification icon colors -> dark tints */
+  .dark .bg-blue-50 { background-color: hsl(217 50% 15%) !important; }
+  .dark .bg-blue-50\/20 { background-color: hsl(217 50% 18% / 0.3) !important; }
+  .dark .bg-blue-100 { background-color: hsl(217 50% 18%) !important; }
+  .dark .bg-green-50 { background-color: hsl(142 40% 13%) !important; }
+  .dark .bg-green-50\/20 { background-color: hsl(142 40% 16% / 0.3) !important; }
+  .dark .bg-red-50 { background-color: hsl(0 50% 15%) !important; }
+  .dark .bg-red-50\/20 { background-color: hsl(0 50% 18% / 0.3) !important; }
+  .dark .bg-purple-50 { background-color: hsl(270 40% 15%) !important; }
+  .dark .bg-purple-50\/20 { background-color: hsl(270 40% 18% / 0.3) !important; }
+  .dark .bg-pink-50 { background-color: hsl(330 40% 15%) !important; }
+  .dark .bg-pink-50\/20 { background-color: hsl(330 40% 18% / 0.3) !important; }
+  .dark .bg-yellow-50 { background-color: hsl(45 40% 13%) !important; }
+  .dark .bg-yellow-50\/20 { background-color: hsl(45 40% 16% / 0.3) !important; }
+  .dark .bg-teal-50 { background-color: hsl(170 40% 13%) !important; }
+  .dark .bg-teal-50\/20 { background-color: hsl(170 40% 16% / 0.3) !important; }
+  .dark .bg-blue-500\/20 { background-color: hsl(217 80% 50% / 0.2) !important; }
+  .dark .bg-green-500\/20 { background-color: hsl(142 70% 50% / 0.2) !important; }
+  .dark .bg-red-500\/20 { background-color: hsl(0 80% 55% / 0.2) !important; }
+  .dark .bg-purple-500\/20 { background-color: hsl(270 70% 55% / 0.2) !important; }
+  .dark .bg-pink-500\/20 { background-color: hsl(330 70% 55% / 0.2) !important; }
+  .dark .bg-yellow-500\/20 { background-color: hsl(45 80% 50% / 0.2) !important; }
+  .dark .bg-teal-500\/20 { background-color: hsl(170 70% 45% / 0.2) !important; }
+  .dark .bg-orange-500\/20 { background-color: hsl(16 90% 55% / 0.2) !important; }
+  .dark .bg-slate-700 { background-color: hsl(220 18% 22%) !important; }
+
+  /* Text colors: slate -> light */
+  .dark .text-slate-900 { color: hsl(28 30% 96%) !important; }
+  .dark .text-slate-800 { color: hsl(28 25% 92%) !important; }
+  .dark .text-slate-700 { color: hsl(28 20% 88%) !important; }
+  .dark .text-slate-600 { color: hsl(28 15% 78%) !important; }
+  .dark .text-slate-500 { color: hsl(28 12% 68%) !important; }
+  .dark .text-slate-400 { color: hsl(28 10% 58%) !important; }
+  .dark .text-slate-300 { color: hsl(28 10% 48%) !important; }
+
+  /* Orange text - vẫn giữ cam sáng để nổi bật */
+  .dark .text-orange-900 { color: hsl(16 80% 70%) !important; }
+  .dark .text-orange-800 { color: hsl(16 80% 70%) !important; }
+  .dark .text-orange-700 { color: hsl(16 85% 68%) !important; }
+  .dark .text-orange-600 { color: hsl(16 90% 65%) !important; }
+  .dark .text-orange-500 { color: hsl(16 95% 62%) !important; }
+  .dark .text-orange-400 { color: hsl(16 100% 65%) !important; }
+
+  /* Borders */
+  .dark .border-slate-100 { border-color: hsl(220 18% 18%) !important; }
+  .dark .border-slate-200 { border-color: hsl(220 18% 22%) !important; }
+  .dark .border-slate-300 { border-color: hsl(220 18% 26%) !important; }
+  .dark .border-orange-100 { border-color: hsl(16 40% 22%) !important; }
+  .dark .border-orange-200 { border-color: hsl(16 45% 28%) !important; }
+  .dark .border-orange-300 { border-color: hsl(16 50% 35%) !important; }
+
+  /* Hover variants */
+  .dark .hover\:bg-slate-50:hover { background-color: hsl(220 22% 15%) !important; }
+  .dark .hover\:bg-slate-100:hover { background-color: hsl(220 22% 18%) !important; }
+  .dark .hover\:bg-orange-50:hover { background-color: hsl(16 40% 18%) !important; }
+  .dark .hover\:bg-orange-100:hover { background-color: hsl(16 40% 22%) !important; }
+  .dark .hover\:text-slate-700:hover { color: hsl(28 30% 96%) !important; }
+  .dark .hover\:text-slate-900:hover { color: hsl(28 30% 98%) !important; }
+  .dark .hover\:text-orange-600:hover { color: hsl(16 95% 65%) !important; }
+
+  /* Placeholder */
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: hsl(28 10% 50%);
+  }
+
+  /* Scrollbar dark */
+  .dark ::-webkit-scrollbar-thumb {
+    background: hsl(220 18% 30%);
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: hsl(16 100% 60%);
+  }
+
+  /* Selection */
+  .dark ::selection {
+    background-color: hsl(16 100% 35%);
+    color: hsl(0 0% 100%);
+  }
+}
+
+/* Smooth theme transition */
+html.theme-transition,
+html.theme-transition * {
+  transition: background-color 200ms ease, border-color 200ms ease,
+    color 200ms ease, fill 200ms ease, stroke 200ms ease;
 }
 
 /* Scrollbar tùy chỉnh */

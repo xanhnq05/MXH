@@ -10,6 +10,12 @@ export const userController = {
     res.json({ user: await userService.getById(req.user._id, req.params.id) });
   }),
 
+  presence: asyncHandler(async (req, res) => {
+    res.json(
+      await userService.getPresence(req.user._id, req.params.id)
+    );
+  }),
+
   search: asyncHandler(async (req, res) => {
     const users = await userService.search(req.user._id, req.query.q);
     res.json({ users });
@@ -31,6 +37,14 @@ export const userController = {
 
   uploadCover: asyncHandler(async (req, res) => {
     res.json({ user: await userService.uploadCover(req.user._id, req.file) });
+  }),
+
+  removeCover: asyncHandler(async (req, res) => {
+    res.json({ user: await userService.removeCover(req.user._id) });
+  }),
+
+  removeAvatar: asyncHandler(async (req, res) => {
+    res.json({ user: await userService.removeAvatar(req.user._id) });
   }),
 
   setE2EEKeys: asyncHandler(async (req, res) => {

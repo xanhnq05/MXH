@@ -1,0 +1,17 @@
+node_modules
+dist
+dist-tsbuild
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.log
+.vscode
+.idea
+tests
+coverage
+.vitest
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx

@@ -8,13 +8,31 @@ import { verifyAccessToken } from "../utils/generateToken.js";
 import User from "../models/User.js";
 import { env } from "../configs/env.config.js";
 
+// Build danh sách origin cho Socket.IO CORS
+const buildSocketOrigins = () => {
+  const list = (process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (env.CLIENT_URL) list.push(env.CLIENT_URL);
+  if (env.ADMIN_CLIENT_URL) list.push(env.ADMIN_CLIENT_URL);
+  // Cho phép mọi subdomain vercel.app
+  return list;
+};
+
 let io = null;
 const userSockets = new Map(); // userId -> Set<socketId>
 
 export const setupSocket = (httpServer) => {
+  const origins = buildSocketOrigins();
   io = new Server(httpServer, {
     cors: {
-      origin: env.CLIENT_URL,
+      origin: (origin, cb) => {
+        if (!origin) return cb(null, true);
+        if (origins.includes(origin)) return cb(null, true);
+        if (/\.vercel\.app$/.test(new URL(origin).hostname)) return cb(null, true);
+        cb(new Error("Socket CORS not allowed: " + origin));
+      },
       credentials: true,
     },
     pingTimeout: 30000,

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { connectSocket, disconnectSocket, getSocket } from "@/lib/socket";
 import { useChatStore } from "@/stores/useChatStore";
@@ -9,21 +9,26 @@ import { useMessageSound } from "./useSound";
 export const useSocket = () => {
   const { accessToken } = useAuthStore();
   const { addMessage, setTyping, setRecording } = useChatStore();
-  const { addNotification, incrementUnread } = useNotificationStore();
+    const { addNotification, incrementUnread, removeNotifications } = useNotificationStore();
   const { setIncomingCall } = useCallStore();
   const { play } = useMessageSound();
-  const initialized = useRef(false);
+
+  // Stable ref to track whether listeners are currently registered
+  const listenersRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!accessToken) {
       disconnectSocket();
-      initialized.current = false;
+      listenersRef.current = false;
       return;
     }
-    if (initialized.current) return;
-    initialized.current = true;
 
     const socket = connectSocket();
+
+    // Prevent double-registration in StrictMode
+    if (listenersRef.current) return;
+    listenersRef.current = true;
+
     const handler = (msg: any) => {
       if (msg.conversationId === useChatStore.getState().activeConversationId) {
         play();
@@ -34,10 +39,32 @@ export const useSocket = () => {
       addMessage(m.conversationId, m);
       if (m.conversationId === useChatStore.getState().activeConversationId) {
         play();
+      } else {
+        // Cập nhật preview trong InboxList (lastMessage + order)
+        useChatStore.getState().refreshConversationPreview(m);
       }
     });
     socket.on("message:read", (data) => {
-      useChatStore.getState().markConversationRead(data.userId, data.lastMessageId);
+      // data: { conversationId, userId, lastMessageId, readAt }
+      if (data?.conversationId && data?.userId && data?.readAt) {
+        useChatStore
+          .getState()
+          .markMessageRead(data.conversationId, data.userId, data.readAt);
+      }
+      useChatStore
+        .getState()
+        .markConversationRead(data.userId, data.lastMessageId);
+    });
+    socket.on("message:delivered", (data) => {
+      // data: { messageId, conversationId, recipientId, deliveredAt }
+      if (data?.messageId && data?.recipientId && data?.deliveredAt) {
+        useChatStore.getState().markMessageDelivered(
+          data.conversationId,
+          data.messageId,
+          data.recipientId,
+          data.deliveredAt
+        );
+      }
     });
     socket.on("typing:start", (data) => {
       setTyping(data.conversationId, data.userId, data.username);
@@ -55,6 +82,12 @@ export const useSocket = () => {
       addNotification(n);
       incrementUnread();
     });
+    socket.on("notification:deleted", (data) => {
+      // Khi admin xóa campaign -> xóa các notif tương ứng khỏi list realtime
+      if (data && Array.isArray(data.ids)) {
+        removeNotifications(data.ids);
+      }
+    });
     socket.on("user:online", (data) => {
       useAuthStore.getState().updateUserStatus(data.userId, true);
     });
@@ -69,19 +102,22 @@ export const useSocket = () => {
     });
 
     return () => {
-      socket.off("message:new", handler);
+      listenersRef.current = false;
+      socket.off("message:new");
       socket.off("message:read");
+      socket.off("message:delivered");
       socket.off("typing:start");
       socket.off("typing:stop");
       socket.off("recording:start");
       socket.off("recording:stop");
       socket.off("notification:new");
+      socket.off("notification:deleted");
       socket.off("user:online");
       socket.off("user:offline");
       socket.off("call:offer");
       socket.off("call:offer:group");
     };
-  }, [accessToken]);
+  }, [accessToken, addMessage, setTyping, setRecording, addNotification, incrementUnread, removeNotifications, setIncomingCall, play]);
 
   return { socket: getSocket() };
 };

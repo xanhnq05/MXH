@@ -2,11 +2,19 @@ import api from "@/lib/axios";
 import type { Conversation, Message } from "@/types/message";
 
 export const chatService = {
-  listConversations: () => api.get("/conversations").then((r) => r.data.conversations as Conversation[]),
+  listConversations: () => api.get("/conversations").then((r) => (r.data.items || []) as Conversation[]),
   getOrCreateDirect: (userId: string) =>
     api.post("/conversations/direct", { userId }).then((r) => r.data.conversation as Conversation),
-  createGroup: (name: string, memberIds: string[]) =>
-    api.post("/conversations/group", { name, memberIds }).then((r) => r.data.conversation as Conversation),
+  createGroup: (
+    name: string,
+    memberIds: string[],
+    joinType: "open" | "closed" = "closed"
+  ) =>
+    api
+      .post("/conversations/group", { name, memberIds, joinType })
+      .then((r) => r.data.conversation as Conversation),
+  joinByLink: (joinLink: string) =>
+    api.post("/conversations/join", { joinLink }).then((r) => r.data.conversation as Conversation),
   getConversation: (id: string) => api.get(`/conversations/${id}`).then((r) => r.data.conversation as Conversation),
   updateGroup: (id: string, payload: { name?: string; avatarUrl?: string; avatarId?: string }) =>
     api.patch(`/conversations/${id}`, payload).then((r) => r.data.conversation),

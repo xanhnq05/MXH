@@ -10,6 +10,7 @@ interface NotificationState {
   setUnreadCount: (n: number) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
+  removeNotifications: (ids: string[]) => void;
   clear: () => void;
 }
 
@@ -31,5 +32,25 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       list: s.list.map((x) => ({ ...x, isRead: true })),
       unreadCount: 0,
     })),
+  /**
+   * Xóa nhiều notification khỏi list (dùng khi admin xóa campaign realtime).
+   * Đồng thời giảm unreadCount theo số chưa đọc bị xóa.
+   */
+  removeNotifications: (ids) =>
+    set((s) => {
+      const idSet = new Set(ids);
+      let removedUnread = 0;
+      const newList = s.list.filter((x) => {
+        if (idSet.has(x._id)) {
+          if (!x.isRead) removedUnread += 1;
+          return false;
+        }
+        return true;
+      });
+      return {
+        list: newList,
+        unreadCount: Math.max(0, s.unreadCount - removedUnread),
+      };
+    }),
   clear: () => set({ list: [], unreadCount: 0 }),
 }));

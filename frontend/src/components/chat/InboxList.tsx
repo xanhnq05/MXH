@@ -2,7 +2,7 @@
 // Highlight active = border + cam nhạt; không đổi background đậm gây chói.
 // Empty / loading / error state đều có hướng dẫn.
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { Search, Plus, MessageCircle, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { chatService } from "@/services/chat.service";
-import { toast } from "sonner";
+import { CreateGroupModal } from "./CreateGroupModal";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "@/types/message";
 
@@ -63,8 +63,11 @@ export const InboxList = ({
   onCreateGroup,
 }: InboxListProps) => {
   const { user } = useAuthStore();
-  const { conversations, loadingConversations, fetchConversations } = useChatStore();
+  const rawConversations = useChatStore((s) => s.conversations);
+  const conversations = Array.isArray(rawConversations) ? rawConversations : [];
+  const { loadingConversations, fetchConversations } = useChatStore();
   const navigate = useNavigate();
+  const [createOpen, setCreateOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = searchQ.trim().toLowerCase();
@@ -81,19 +84,13 @@ export const InboxList = ({
     });
   }, [conversations, searchQ, user?._id]);
 
-  const handleCreateGroup = async () => {
+  const handleCreateGroup = () => {
     if (onCreateGroup) {
       onCreateGroup();
       return;
     }
-    const name = window.prompt("Tên nhóm:");
-    if (!name) return;
-    try {
-      const c = await chatService.createGroup(name, []);
-      navigate(`/chat/${c._id}`);
-    } catch {
-      toast.error("Tạo nhóm thất bại");
-    }
+    // Mở modal tạo nhóm
+    setCreateOpen(true);
   };
 
   return (
@@ -117,7 +114,7 @@ export const InboxList = ({
           <Input
             value={searchQ}
             onChange={onSearchChange as any}
-            placeholder="Tìm hội thoại..."
+            placeholder="Tìm bạn bè..."
             className="pl-9"
           />
         </div>
@@ -187,7 +184,7 @@ export const InboxList = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="font-semibold text-sm truncate">
+                        <p className="font-semibold text-sm truncate text-foreground dark:text-white">
                           {name}
                         </p>
                         {lastMsg?.createdAt && (
@@ -220,6 +217,15 @@ export const InboxList = ({
           </div>
         )}
       </div>
+
+      <CreateGroupModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={(id) => {
+          fetchConversations();
+          navigate(`/chat/${id}`);
+        }}
+      />
     </div>
   );
 };

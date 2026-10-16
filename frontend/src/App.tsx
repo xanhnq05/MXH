@@ -13,22 +13,25 @@ import FriendsPage from "./pages/FriendsPage";
 import ChatPage from "./pages/ChatPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import SearchPage from "./pages/SearchPage";
+import PostDetailPage from "./pages/PostDetailPage";
 import GroupSettingsPage from "./pages/GroupSettingsPage";
-import AdminMediaPage from "./pages/AdminMediaPage";
 import MainLayout from "./components/layout/MainLayout";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import AdminRoute from "./components/auth/AdminRoute";
 import { SocketProvider } from "./components/providers/SocketProvider";
 import { ThemeProvider } from "./components/providers/ThemeProvider";
 import { GlobalCallManager } from "./components/call/GlobalCallManager";
 import { LightboxProvider } from "./components/providers/LightboxProvider";
+import { ConfirmDialogProvider } from "./components/providers/ConfirmDialogProvider";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary";
+import { NotificationClickHandler } from "./components/notifications/NotificationClickHandler";
 
 function App() {
   return (
     <ThemeProvider>
       <Toaster richColors position="top-right" />
-      <BrowserRouter>
-        <Routes>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <Routes>
           <Route path="/signin" element={<SignInPage />} />
           <Route path="/signup" element={<SignUpPage />} />
           <Route path="/verify-otp" element={<OtpVerifyPage />} />
@@ -53,27 +56,24 @@ function App() {
             <Route path="/chat/:conversationId/settings" element={<GroupSettingsPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/search" element={<SearchPage />} />
-            <Route
-              path="/admin/media"
-              element={
-                <AdminRoute>
-                  <AdminMediaPage />
-                </AdminRoute>
-              }
-            />
+            <Route path="/post/:id" element={<PostDetailPage />} />
           </Route>
         </Routes>
-      </BrowserRouter>
+        <NotificationClickHandler />
+        </BrowserRouter>
+      </ErrorBoundary>
     </ThemeProvider>
   );
 }
 
 const AppProviders = ({ children }: { children: React.ReactNode }) => (
-  <SocketProvider>
-    <LightboxProvider>
-      <GlobalCallManager>{children}</GlobalCallManager>
-    </LightboxProvider>
-  </SocketProvider>
+  <ConfirmDialogProvider>
+    <SocketProvider>
+      <LightboxProvider>
+        <GlobalCallManager>{children}</GlobalCallManager>
+      </LightboxProvider>
+    </SocketProvider>
+  </ConfirmDialogProvider>
 );
 
 export default App;

@@ -3,10 +3,12 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import MessageBubble from "@/components/chat/MessageBubble";
+import { TimeDivider } from "@/components/chat/TimeDivider";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { ArrowDown } from "lucide-react";
-import type { Message, User } from "@/types/message";
+import { cn } from "@/lib/utils";
+import type { Message, User, Conversation } from "@/types/message";
 
 interface MessageListProps {
   messages: Message[];
@@ -17,7 +19,32 @@ interface MessageListProps {
   onDeleted: (msgId: string) => void;
   onLoadMore?: () => void;
   hasMore?: boolean;
+  conversation?: Conversation | null;
 }
+
+/**
+ * Khoảng cách tối thiểu (ms) giữa 2 message để chèn time divider.
+ * Spec: > 5 phút
+ */
+const DIVIDER_THRESHOLD_MS = 5 * 60 * 1000;
+
+/**
+ * Quyết định có chèn divider TRƯỚC message `m` không.
+ * - Có: nếu (a) ngày khác với message trước, hoặc (b) cách > 5 phút.
+ *   Nhưng nếu ngày khác, label sẽ theo ngày (do formatTimeLabel xử lý).
+ * - Còn lại: false.
+ */
+const shouldShowDivider = (prev: Message | undefined, curr: Message): boolean => {
+  if (!prev) return true; // message đầu tiên
+  const prevDate = new Date(prev.createdAt);
+  const currDate = new Date(curr.createdAt);
+  // Khác ngày (theo local) → luôn hiện divider
+  const prevDay = prevDate.toDateString();
+  const currDay = currDate.toDateString();
+  if (prevDay !== currDay) return true;
+  // Cùng ngày, cách > 5 phút
+  return currDate.getTime() - prevDate.getTime() > DIVIDER_THRESHOLD_MS;
+};
 
 const STICKY_OFFSET = 80; // px from bottom that still counts as "near bottom"
 
@@ -30,6 +57,7 @@ export const MessageList = ({
   onDeleted,
   onLoadMore,
   hasMore,
+  conversation,
 }: MessageListProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastCountRef = useRef(0);
@@ -73,6 +101,34 @@ export const MessageList = ({
     el.scrollTop = el.scrollHeight;
   }, []);
 
+  // Lắng nghe event scroll-to-message (khi user click vào reply quote)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent<{ id: string }>).detail?.id;
+      if (!id) return;
+      const container = scrollRef.current;
+      if (!container) return;
+      // Tìm bubble có data-msg-id
+      const target = container.querySelector(
+        `[data-msg-id="${CSS.escape(id)}"]`
+      ) as HTMLElement | null;
+      if (!target) return;
+      // Scroll mượt tới bubble, canh giữa
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const offset =
+        targetRect.top - containerRect.top + container.scrollTop - 100;
+      container.scrollTo({ top: offset, behavior: "smooth" });
+      // Flash highlight
+      target.classList.add("mxh-flash-highlight");
+      setTimeout(() => {
+        target.classList.remove("mxh-flash-highlight");
+      }, 1400);
+    };
+    window.addEventListener("mxh:scroll-to-message", handler);
+    return () => window.removeEventListener("mxh:scroll-to-message", handler);
+  }, []);
+
   const jumpToBottom = () => {
     const el = scrollRef.current;
     if (!el) return;
@@ -82,7 +138,7 @@ export const MessageList = ({
   };
 
   return (
-    <div className="relative flex-1 min-h-0">
+    <div className="relative flex-1 min-h-0 bg-orange-50/30 dark:bg-slate-900">
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -113,29 +169,75 @@ export const MessageList = ({
             </p>
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-0.5">
             {messages.map((m, i) => {
               const sender = typeof m.senderId === "object" ? (m.senderId as User) : null;
               const isMe = sender?._id === currentUser._id;
               const prev = messages[i - 1];
-              const showAvatar =
-                !isMe &&
-                (!prev ||
-                  (typeof prev.senderId === "object" &&
-                    (prev.senderId as User)._id !== sender?._id));
-              const showName = isGroup && !isMe && showAvatar;
+
+              // Xác định cụm message liên tiếp cùng sender
+              const prevSender = prev
+                ? typeof prev.senderId === "object"
+                  ? (prev.senderId as User)._id
+                  : (prev.senderId as string)
+                : null;
+              const currSender = sender?._id;
+              const sameAsPrev = !!prev && prevSender === currSender;
+              const withinMinute = sameAsPrev
+                ? new Date(m.createdAt).getTime() -
+                    new Date(prev!.createdAt).getTime() <
+                  60_000
+                : false;
+              const isFirstOfCluster = !sameAsPrev || !withinMinute;
+
+              // showAvatar: chỉ hiện ở đầu cụm (kể cả mình lẫn người khác)
+              const showAvatar = isFirstOfCluster;
+              // showName: chỉ hiện tên ở đầu cụm khi group
+              const showName = isGroup && isFirstOfCluster;
+
+              // Tìm tin nhắn cuối cùng của cụm isMe liên tiếp để gắn status
+              // (chỉ áp dụng khi sender là mình, để tránh status hiện ở mỗi dòng)
+              const isLastOfMyCluster = (() => {
+                if (!isMe) return true; // không liên quan
+                const next = messages[i + 1];
+                if (!next) return true;
+                const nextSender =
+                  typeof next.senderId === "object"
+                    ? (next.senderId as User)._id
+                    : (next.senderId as string);
+                if (nextSender !== currSender) return true;
+                // cùng sender: còn trong cụm nếu cách < 1 phút
+                return (
+                  new Date(next.createdAt).getTime() -
+                    new Date(m.createdAt).getTime() >=
+                  60_000
+                );
+              })();
+
+              const showDivider = shouldShowDivider(prev, m);
+
               return (
-                <MessageBubble
+                <div
                   key={m._id}
-                  msg={m}
-                  isMe={isMe}
-                  showAvatar={showAvatar}
-                  showName={showName}
-                  currentUser={currentUser}
-                  onReply={onReply}
-                  onDeleted={onDeleted}
-                  isGroup={isGroup}
-                />
+                  className={cn(
+                    "transition-colors hover:bg-accent/30",
+                    !isFirstOfCluster ? "mt-0.5" : "mt-2.5"
+                  )}
+                >
+                  {showDivider && <TimeDivider at={m.createdAt} />}
+                  <MessageBubble
+                    msg={m}
+                    isMe={isMe}
+                    showAvatar={showAvatar}
+                    showName={showName}
+                    currentUser={currentUser}
+                    onReply={onReply}
+                    onDeleted={onDeleted}
+                    isGroup={isGroup}
+                    conversation={conversation}
+                    showStatus={isLastOfMyCluster}
+                  />
+                </div>
               );
             })}
           </div>

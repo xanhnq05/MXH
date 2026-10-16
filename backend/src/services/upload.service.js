@@ -1,6 +1,9 @@
-// Upload service — đẩy file lên Supabase S3, trả về public URL + storageKey.
+// Upload service — đẩy file lên Supabase Storage qua S3-compatible API.
+// Trả về public URL + storageKey.
 
-import { supabase, BUCKET } from "../configs/supabase.config.js";
+import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { s3, BUCKET, buildPublicUrl } from "../configs/supabase.config.js";
 import { ApiError } from "../utils/ApiError.js";
 
 const buildPath = (folder, userId, originalName) => {
@@ -13,30 +16,31 @@ const buildPath = (folder, userId, originalName) => {
 
 export const uploadService = {
   /**
-   * Upload 1 file (Buffer từ multer).
+   * Upload 1 file (Buffer từ multer) lên Supabase Storage qua S3 API.
    * @returns {{url: string, key: string, size: number, mimeType: string}}
    */
   async uploadFile({ buffer, originalName, mimetype, folder, userId }) {
     if (!buffer) throw ApiError.badRequest("Thiếu file");
-    const path = buildPath(folder, userId, originalName);
+    const key = buildPath(folder, userId, originalName);
 
-    const { error } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, buffer, {
-        contentType: mimetype,
-        upsert: false,
-        cacheControl: "3600",
-      });
-
-    if (error) {
-      console.error("Supabase upload error:", error);
-      throw new ApiError(500, "Upload thất bại: " + error.message);
+    try {
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: BUCKET,
+          Key: key,
+          Body: buffer,
+          ContentType: mimetype,
+          CacheControl: "3600",
+        })
+      );
+    } catch (err) {
+      console.error("S3 upload error:", err);
+      throw new ApiError(500, "Upload thất bại: " + (err.message || err.name));
     }
 
-    const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
     return {
-      url: pub.publicUrl,
-      key: path,
+      url: buildPublicUrl(key),
+      key,
       size: buffer.length,
       mimeType: mimetype,
     };
@@ -61,16 +65,28 @@ export const uploadService = {
   /** Xoá file theo storageKey */
   async deleteFile(storageKey) {
     if (!storageKey) return;
-    const { error } = await supabase.storage.from(BUCKET).remove([storageKey]);
-    if (error) console.warn("Supabase delete warning:", error.message);
+    try {
+      await s3.send(
+        new DeleteObjectCommand({
+          Bucket: BUCKET,
+          Key: storageKey,
+        })
+      );
+    } catch (err) {
+      console.warn("S3 delete warning:", err.message || err.name);
+    }
   },
 
   /** Sinh signed URL (cho media riêng tư, mặc định 7 ngày) */
   async getSignedUrl(storageKey, expiresIn = 60 * 60 * 24 * 7) {
-    const { data, error } = await supabase.storage
-      .from(BUCKET)
-      .createSignedUrl(storageKey, expiresIn);
-    if (error) throw new ApiError(500, "Không tạo được signed URL");
-    return data.signedUrl;
+    try {
+      const cmd = new GetObjectCommand({
+        Bucket: BUCKET,
+        Key: storageKey,
+      });
+      return await getSignedUrl(s3, cmd, { expiresIn });
+    } catch (err) {
+      throw new ApiError(500, "Không tạo được signed URL: " + (err.message || err.name));
+    }
   },
 };

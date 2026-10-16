@@ -20,17 +20,20 @@ export const env = {
   PORT: Number(process.env.PORT) || 5001,
   NODE_ENV: process.env.NODE_ENV || "development",
   CLIENT_URL: process.env.CLIENT_URL,
+  ADMIN_CLIENT_URL: process.env.ADMIN_CLIENT_URL || process.env.CLIENT_URL,
   MONGODB_URI: process.env.MONGODB_URI,
   ACCESS_TOKEN_SECRET: process.env.ACCESS_TOKEN_SECRET,
   REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET,
   ACCESS_TOKEN_TTL: process.env.ACCESS_TOKEN_TTL || "15m",
   REFRESH_TOKEN_TTL_MS: msFromString(process.env.REFRESH_TOKEN_TTL || "7d"),
 
-  // Supabase
-  SUPABASE_URL: process.env.SUPABASE_URL,
-  SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY,
-  SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
+  // Supabase Storage (S3-compatible)
   SUPABASE_BUCKET: process.env.SUPABASE_BUCKET || "GreenX",
+  SUPABASE_S3_ENDPOINT: process.env.SUPABASE_S3_ENDPOINT,
+  SUPABASE_S3_REGION: process.env.SUPABASE_S3_REGION || "ap-southeast-1",
+  SUPABASE_S3_ACCESS_KEY_ID: process.env.SUPABASE_S3_ACCESS_KEY_ID,
+  SUPABASE_S3_SECRET_ACCESS_KEY: process.env.SUPABASE_S3_SECRET_ACCESS_KEY,
+  SUPABASE_PUBLIC_URL: process.env.SUPABASE_PUBLIC_URL,
 
   // Gmail
   GMAIL_USER: process.env.GMAIL_USER,

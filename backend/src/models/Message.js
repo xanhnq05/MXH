@@ -59,6 +59,10 @@ const messageSchema = new mongoose.Schema(
     stickerId: { type: String },
     stickerUrl: { type: String },
 
+    // Share post (dùng khi type=share_post)
+    postId: { type: mongoose.Schema.Types.ObjectId, ref: "Post" },
+    postUrl: { type: String },
+
     // E2EE
     isEncrypted: { type: Boolean, default: false },
     iv: { type: String }, // base64
