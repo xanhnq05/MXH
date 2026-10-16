@@ -5,6 +5,10 @@ export const userService = {
   getMe: () => api.get("/users/me").then((r) => r.data.user as User),
   getById: (id: string) =>
     api.get(`/users/${id}`).then((r) => r.data.user as User),
+  getPresence: (id: string) =>
+    api
+      .get(`/users/${id}/presence`)
+      .then((r) => r.data as { isOnline: boolean; lastSeen: string }),
   search: (q: string) =>
     api
       .get(`/users/search?q=${encodeURIComponent(q)}`)
@@ -31,6 +35,8 @@ export const userService = {
       })
       .then((r) => r.data.user);
   },
+  removeCover: () => api.delete("/users/me/cover").then((r) => r.data.user as User),
+  removeAvatar: () => api.delete("/users/me/avatar").then((r) => r.data.user as User),
   setE2EEKeys: (payload: { publicKey?: string; ecdhPublicKey?: string }) =>
     api.post("/users/me/e2ee-keys", payload).then((r) => r.data.user),
   deleteAccount: () => api.delete("/users/me").then((r) => r.data),

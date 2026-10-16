@@ -36,6 +36,16 @@ const userSchema = new mongoose.Schema(
     },
     isDeleted: { type: Boolean, default: false, index: true },
     deletedAt: { type: Date, default: null },
+
+    // ===== Moderation (admin) =====
+    isBanned: { type: Boolean, default: false, index: true },
+    bannedUntil: { type: Date, default: null, index: true },
+    bannedAt: { type: Date, default: null },
+    bannedReason: { type: String, default: "" },
+    warningCount: { type: Number, default: 0 },
+    riskScore: { type: Number, default: 0 },
+    lastIpCountry: { type: String, default: "" },
+
     birthday: {
       type: Date,
     },

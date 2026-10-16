@@ -1,7 +1,10 @@
 import { io, Socket } from "socket.io-client";
 import { useAuthStore } from "@/stores/useAuthStore";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5001";
+// Ưu tiên VITE_SOCKET_URL, fallback VITE_API_URL (strip /api), cuối cùng localhost
+const rawApi = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL || rawApi.replace(/\/api\/?$/, "");
 
 let socket: Socket | null = null;
 

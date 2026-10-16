@@ -111,7 +111,7 @@ const EditProfilePage = () => {
       setSaving(true);
       const updated = await userService.updateProfile({
         displayName: displayName.trim().slice(0, 60),
-        bio: bio.slice(0, 500),
+        bio: bio.slice(0, 100),
         phone: phone.slice(0, 20),
         country: country.slice(0, 80),
         city: city.slice(0, 80),
@@ -252,20 +252,20 @@ const EditProfilePage = () => {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-orange-50/30">
+    <div className="h-full overflow-y-auto bg-orange-50/30 dark:bg-slate-950">
       <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-5">
         {/* Header */}
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
             Sửa hồ sơ
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Cập nhật thông tin để bạn bè dễ tìm và gợi ý phù hợp
           </p>
         </div>
 
         {/* Cover + Avatar */}
-        <div className="bg-white rounded-2xl border border-orange-100 overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-orange-100 dark:border-slate-800 overflow-hidden">
           <div className="relative h-40 sm:h-48 bg-gradient-to-br from-orange-200 via-orange-100 to-amber-50">
             {(coverPreview || user.coverUrl) && (
               <img
@@ -277,7 +277,7 @@ const EditProfilePage = () => {
             <button
               onClick={() => coverInputRef.current?.click()}
               disabled={uploadingCover}
-              className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 bg-white/90 hover:bg-white text-slate-700 px-3 py-1.5 rounded-lg shadow-sm text-sm font-medium"
+              className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 bg-white/90 dark:bg-slate-800/90 hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-white px-3 py-1.5 rounded-lg shadow-sm text-sm font-medium"
             >
               {uploadingCover ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -356,16 +356,16 @@ const EditProfilePage = () => {
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              maxLength={500}
+              maxLength={100}
               rows={3}
               placeholder="Chia sẻ đôi chút về bạn..."
               className={cn(
-                "w-full rounded-lg border bg-white px-3 py-2.5 text-slate-900 placeholder:text-slate-400 outline-none",
+                "w-full rounded-lg border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 px-3 py-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/30",
                 "border-slate-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-colors resize-none"
               )}
             />
             <p className="text-xs text-slate-500 mt-1 text-right">
-              {bio.length} / 500
+              {bio.length} / 100
             </p>
           </div>
         </Section>
@@ -433,7 +433,7 @@ const EditProfilePage = () => {
             </Label>
             {!editingUsername ? (
               <div className="flex items-center gap-2">
-                <div className="flex-1 h-10 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 text-sm flex items-center">
+                <div className="flex-1 h-10 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm flex items-center">
                   @{user.username}
                 </div>
                 <Button
@@ -532,7 +532,7 @@ const EditProfilePage = () => {
         </Section>
 
         {/* Actions */}
-        <div className="flex gap-3 sticky bottom-0 bg-white/80 backdrop-blur p-3 -mx-3 border-t border-orange-100">
+        <div className="flex gap-3 sticky bottom-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur p-3 -mx-3 border-t border-orange-100 dark:border-slate-800">
           <Button
             variant="outline"
             onClick={() => navigate("/profile")}
@@ -631,7 +631,7 @@ const Section = ({
 }) => (
   <div
     className={cn(
-      "rounded-2xl border p-4 sm:p-5 space-y-4 bg-white",
+      "rounded-2xl border p-4 sm:p-5 space-y-4 bg-white dark:bg-slate-900 border-orange-100 dark:border-slate-800",
       variant === "danger"
         ? "border-red-100"
         : "border-orange-100"

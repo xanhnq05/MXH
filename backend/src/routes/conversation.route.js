@@ -12,6 +12,7 @@ import {
   muteSchema,
   pinSchema,
   transferOwnershipSchema,
+  joinByLinkSchema,
 } from "../validators/chat.validator.js";
 
 const router = Router();
@@ -20,6 +21,7 @@ router.use(protectedRoute);
 router.get("/", conversationController.list);
 router.post("/direct", validate(createDirectSchema), conversationController.getOrCreateDirect);
 router.post("/group", validate(createGroupSchema), conversationController.createGroup);
+router.post("/join", validate(joinByLinkSchema), conversationController.joinByLink);
 router.get("/:id", conversationController.getById);
 router.patch("/:id", validate(updateGroupSchema), conversationController.updateGroup);
 router.delete("/:id", conversationController.deleteGroup);

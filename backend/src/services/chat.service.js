@@ -7,9 +7,29 @@ import Friendship from "../models/Friendship.js";
 import { ApiError } from "../utils/ApiError.js";
 import { notificationService } from "./notification.service.js";
 import { emitToUser, emitToConversation } from "../libs/socket.js";
+import { paginate } from "../utils/pagination.js";
+import cache from "../libs/cache.js";
 
-const MIN_GROUP_MEMBERS = 3;
-const MAX_GROUP_MEMBERS = 100;
+const MIN_GROUP_MEMBERS = 1;
+const MAX_GROUP_MEMBERS = 50;
+
+// Sinh slug base62 8 ký tự, đảm bảo unique trong DB
+const generateJoinLink = async () => {
+  const alphabet =
+    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  const len = 8;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let s = "";
+    for (let i = 0; i < len; i++) {
+      s += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    // Check collision nhanh
+    const exists = await Conversation.findOne({ joinLink: s }).lean();
+    if (!exists) return s;
+  }
+  // Fallback: dùng timestamp hex
+  return Date.now().toString(36).slice(-8);
+};
 
 const assertNotBlocked = async (a, b) => {
   const blocked = await Block.findOne({
@@ -27,6 +47,24 @@ const buildDirectMember = (userId, role = "member") => ({
   joinedAt: new Date(),
   lastReadMessageId: null,
 });
+
+/** Invalidate conversation list cache cho 1 user (sau khi co update) */
+const invalidateConvListCache = async (userId) => {
+  if (!userId) return;
+  try {
+    await cache.delPattern(`conversations:user:${userId.toString()}:*`);
+  } catch {
+    // Silent - cache optional
+  }
+};
+
+/** Invalidate cache cho tat ca member trong conversation */
+const invalidateConvCacheForMembers = async (conv) => {
+  if (!conv || !conv.members) return;
+  await Promise.allSettled(
+    conv.members.map((m) => invalidateConvListCache(m.userId))
+  );
+};
 
 export const chatService = {
   /** Lấy hoặc tạo hội thoại direct 1-1 */
@@ -52,13 +90,16 @@ export const chatService = {
         buildDirectMember(otherId),
       ],
     });
+    await invalidateConvCacheForMembers(conv);
     return conv;
   },
 
   /** Tạo nhóm chat */
-  async createGroup(meId, { name, memberIds = [] }) {
+  async createGroup(meId, { name, memberIds = [], joinType = "closed" } = {}) {
     if (!name || name.trim().length === 0)
       throw new ApiError(400, "Tên nhóm không được để trống");
+    if (!["open", "closed"].includes(joinType))
+      throw new ApiError(400, "joinType không hợp lệ");
 
     const allIds = Array.from(new Set([meId.toString(), ...memberIds.map(String)]));
     if (allIds.length < MIN_GROUP_MEMBERS)
@@ -70,9 +111,14 @@ export const chatService = {
     if (users.length !== allIds.length)
       throw new ApiError(404, "Có thành viên không tồn tại");
 
+    // Sinh joinLink chỉ khi nhóm mở
+    const joinLink = joinType === "open" ? await generateJoinLink() : null;
+
     const conv = await Conversation.create({
       type: "group",
       name: name.trim(),
+      joinType,
+      joinLink,
       members: allIds.map((id) =>
         buildDirectMember(
           id,
@@ -97,15 +143,65 @@ export const chatService = {
     return conv;
   },
 
-  async listForUser(meId) {
-    return Conversation.find({ "members.userId": meId })
-      .sort({ lastMessageAt: -1 })
-      .populate("members.userId", "username displayName avatarUrl isOnline lastSeen")
-      .populate({
-        path: "lastMessage",
-        select: "type content senderId isEncrypted createdAt",
-        populate: { path: "senderId", select: "username displayName" },
-      });
+  /**
+   * Vào nhóm mở qua link. Trả về conversation nếu thành công.
+   * - Chỉ nhóm joinType=open mới join được
+   * - Không cần là bạn bè
+   * - Không vượt quá MAX_GROUP_MEMBERS
+   */
+  async joinByLink(meId, joinLink) {
+    if (!joinLink || !String(joinLink).trim())
+      throw new ApiError(400, "Thiếu link mời");
+    const conv = await Conversation.findOne({ joinLink: String(joinLink).trim() });
+    if (!conv) throw new ApiError(404, "Link mời không hợp lệ");
+    if (conv.type !== "group")
+      throw new ApiError(400, "Không phải nhóm");
+    if (conv.joinType !== "open")
+      throw new ApiError(403, "Nhóm này không cho phép vào qua link");
+    if (conv.members.some((m) => m.userId.toString() === meId.toString()))
+      throw new ApiError(409, "Bạn đã là thành viên");
+    if (conv.members.length >= MAX_GROUP_MEMBERS)
+      throw new ApiError(400, `Nhóm đã đầy (tối đa ${MAX_GROUP_MEMBERS} thành viên)`);
+
+    conv.members.push(buildDirectMember(meId, "member"));
+    conv.lastMessageAt = new Date();
+    await conv.save();
+    await invalidateConvCacheForMembers(conv);
+    emitToConversation(conv._id.toString(), "conversation:updated", conv);
+    return conv;
+  },
+
+  async listForUser(meId, { cursor, limit = 20 } = {}) {
+    // Cache chi ap dung cho trang dau (cursor=null, limit default 20)
+    // Trang sau se thay doi khi co tin nhan moi nen khong cache
+    const cacheKey = `conversations:user:${meId.toString()}:limit:${limit}`;
+    if (!cursor && limit === 20 && cache.isAvailable()) {
+      const cached = await cache.get(cacheKey);
+      if (cached) return cached;
+      const result = await this._fetchConversations(meId, cursor, limit);
+      await cache.set(cacheKey, result, 30);
+      return result;
+    }
+    return this._fetchConversations(meId, cursor, limit);
+  },
+
+  async _fetchConversations(meId, cursor, limit) {
+    const { items, nextCursor } = await paginate({
+      model: Conversation,
+      filter: { "members.userId": meId },
+      cursor,
+      limit,
+      sort: { lastMessageAt: -1, _id: -1 },
+      populate: [
+        { path: "members.userId", select: "username displayName avatarUrl isOnline lastSeen" },
+        {
+          path: "lastMessage",
+          select: "type content senderId isEncrypted createdAt",
+          populate: { path: "senderId", select: "username displayName" },
+        },
+      ],
+    });
+    return { items, nextCursor };
   },
 
   async getById(meId, convId) {
@@ -124,12 +220,14 @@ export const chatService = {
     if (avatarUrl) conv.avatarUrl = avatarUrl;
     if (avatarId) conv.avatarId = avatarId;
     await conv.save();
+    await invalidateConvCacheForMembers(conv);
     emitToConversation(convId, "conversation:updated", conv);
     return conv;
   },
 
   async deleteGroup(meId, convId) {
     const conv = await this._assertGroup(meId, convId, ["owner"]);
+    await invalidateConvCacheForMembers(conv);
     await conv.deleteOne();
     emitToConversation(convId, "conversation:deleted", { conversationId: convId });
     return { success: true };
@@ -168,6 +266,7 @@ export const chatService = {
     }
     conv.members.splice(idx, 1);
     await conv.save();
+    await invalidateConvCacheForMembers(conv);
     emitToConversation(convId, "conversation:member-left", {
       conversationId: convId,
       userId: meId,
@@ -186,6 +285,7 @@ export const chatService = {
 
     conv.members.push(...newIds.map((id) => buildDirectMember(id, "member")));
     await conv.save();
+    await invalidateConvCacheForMembers(conv);
 
     for (const id of newIds) {
       await notificationService.push({
@@ -216,6 +316,7 @@ export const chatService = {
       throw new ApiError(403, "Chỉ chủ nhóm mới có thể xoá admin khác");
     conv.members.splice(idx, 1);
     await conv.save();
+    await invalidateConvCacheForMembers(conv);
     emitToConversation(convId, "conversation:member-removed", {
       conversationId: convId,
       userId: targetId,
@@ -235,6 +336,7 @@ export const chatService = {
       throw new ApiError(400, "Hãy chuyển quyền chủ nhóm trước");
     target.role = newRole;
     await conv.save();
+    await invalidateConvCacheForMembers(conv);
     emitToConversation(convId, "conversation:updated", conv);
     return conv;
   },
@@ -261,6 +363,7 @@ export const chatService = {
     if (currentOwner) currentOwner.role = "admin";
     target.role = "owner";
     await conv.save();
+    await invalidateConvCacheForMembers(conv);
     emitToConversation(convId, "conversation:ownership-transferred", {
       conversationId: convId,
       fromUserId: meId,
@@ -279,6 +382,7 @@ export const chatService = {
     if (!me) throw new ApiError(403, "Bạn không phải thành viên");
     me.nickname = nickname ? nickname.trim().slice(0, 40) : null;
     await conv.save();
+    await invalidateConvListCache(meId);
     emitToConversation(convId, "conversation:updated", conv);
     return conv;
   },
@@ -292,6 +396,7 @@ export const chatService = {
     if (mute && idx === -1) conv.mutedBy.push(meId);
     if (!mute && idx !== -1) conv.mutedBy.splice(idx, 1);
     await conv.save();
+    await invalidateConvListCache(meId);
     return { muted: mute };
   },
 

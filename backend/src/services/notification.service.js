@@ -1,7 +1,10 @@
 // Notification service — push vào DB + bắn realtime qua socket.
 
 import Notification from "../models/Notification.js";
+import { ApiError } from "../utils/ApiError.js";
 import { emitToUser } from "../libs/socket.js";
+
+const NOTIFICATION_MAX = 100; // giữ tối đa 100 thông báo gần nhất cho mỗi user
 
 const NOTIFICATION_ICONS = {
   friend_request: "👋",
@@ -65,6 +68,25 @@ export const notificationService = {
       createdAt: notif.createdAt,
     };
     emitToUser(recipientId.toString(), "notification:new", payload);
+
+    // Sau khi đẩy realtime xong, dọn các thông báo cũ vượt quá giới hạn
+    try {
+      const total = await Notification.countDocuments({ recipientId });
+      if (total > NOTIFICATION_MAX) {
+        const overflow = total - NOTIFICATION_MAX;
+        // Xoá các thông báo cũ nhất (ưu tiên đã đọc trước)
+        const oldDocs = await Notification.find({ recipientId })
+          .sort({ isRead: -1, createdAt: 1 })
+          .limit(overflow)
+          .select("_id");
+        if (oldDocs.length) {
+          await Notification.deleteMany({ _id: { $in: oldDocs.map((d) => d._id) } });
+        }
+      }
+    } catch (e) {
+      console.warn("[notification.push] cleanup failed:", e?.message);
+    }
+
     return notif;
   },
 
@@ -91,7 +113,7 @@ export const notificationService = {
       { isRead: true, readAt: new Date() },
       { new: true }
     );
-    if (!n) throw new Error("Không tìm thấy thông báo");
+    if (!n) throw new ApiError(404, "Không tìm thấy thông báo");
     return n;
   },
 

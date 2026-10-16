@@ -28,6 +28,7 @@ import callRoute from "./routes/call.route.js";
 import stickerRoute from "./routes/sticker.route.js";
 import gifRoute from "./routes/gif.route.js";
 import adminRoute from "./routes/admin.route.js";
+import reportsRoute from "./routes/reports.route.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -39,9 +40,26 @@ app.use(
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
+// CORS: cho phép nhiều domain (vd: greenx.app + www.greenx.app + vercel preview)
+const allowedOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+if (!allowedOrigins.length) {
+  // Fallback: dùng 2 env cũ
+  if (env.CLIENT_URL) allowedOrigins.push(env.CLIENT_URL);
+  if (env.ADMIN_CLIENT_URL) allowedOrigins.push(env.ADMIN_CLIENT_URL);
+}
 app.use(
   cors({
-    origin: env.CLIENT_URL,
+    origin: (origin, cb) => {
+      // Cho phép Postman/curl (không có Origin)
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      // Cho phép mọi subdomain vercel.app (preview deploys)
+      if (/\.vercel\.app$/.test(new URL(origin).hostname)) return cb(null, true);
+      cb(new Error("CORS not allowed: " + origin));
+    },
     credentials: true,
   })
 );
@@ -73,6 +91,7 @@ app.use("/api/calls", callRoute);
 app.use("/api/stickers", stickerRoute);
 app.use("/api/gifs", gifRoute);
 app.use("/api/admin", adminRoute);
+app.use("/api/reports", reportsRoute);
 
 // ===== 404 + Error handler (cuối cùng) =====
 app.use(notFoundMiddleware);
@@ -82,9 +101,10 @@ app.use(errorMiddleware);
 const start = async () => {
   await connectDB();
   setupSocket(httpServer);
-  httpServer.listen(env.PORT, () => {
-    console.log(`🚀 MXH backend đang chạy tại http://localhost:${env.PORT}`);
-    console.log(`🌐 CORS cho phép: ${env.CLIENT_URL}`);
+  // Render yêu cầu bind 0.0.0.0 (không phải localhost)
+  httpServer.listen(env.PORT, "0.0.0.0", () => {
+    console.log(`MXH backend dang chay tai 0.0.0.0:${env.PORT}`);
+    console.log(`CORS cho phep: ${[env.CLIENT_URL, env.ADMIN_CLIENT_URL].filter(Boolean).join(", ")}`);
   });
 };
 

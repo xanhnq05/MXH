@@ -29,6 +29,7 @@ import { useCallManager } from "@/components/call/GlobalCallManager";
 import { useChatStore } from "@/stores/useChatStore";
 import { chatService } from "@/services/chat.service";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/providers/ConfirmDialogProvider";
 import { cn } from "@/lib/utils";
 import type { Conversation, Message } from "@/types/message";
 
@@ -61,6 +62,7 @@ export const ChatHeader = ({ conversation, onBack, onOpenDetails }: ChatHeaderPr
   const { user } = useAuthStore();
   const call = useCallManager();
   const navigate = useNavigate();
+  const { confirm } = useConfirm();
   const isGroup = conversation.type === "group";
   const other = getOtherMember(conversation, user?._id);
   const name = isGroup ? conversation.name : other?.displayName;
@@ -94,18 +96,24 @@ export const ChatHeader = ({ conversation, onBack, onOpenDetails }: ChatHeaderPr
   };
 
   const handleLeaveGroup = async () => {
-    if (!window.confirm("Rời khỏi nhóm này?")) return;
+    const ok = await confirm({
+      title: "Rời khỏi nhóm?",
+      message: "Bạn sẽ không nhận được tin nhắn mới từ nhóm này nữa.",
+      confirmLabel: "Rời nhóm",
+      variant: "warning",
+    });
+    if (!ok) return;
     try {
       await chatService.leaveGroup(conversation._id);
       toast.success("Đã rời nhóm");
       navigate("/chat");
-    } catch {
-      toast.error("Không thể rời nhóm");
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Không thể rời nhóm");
     }
   };
 
   return (
-    <div className="border-b px-3 py-2.5 flex items-center justify-between bg-background/95 backdrop-blur shrink-0">
+    <div className="border-b border-slate-200 dark:border-slate-800 px-3 py-2.5 flex items-center justify-between bg-background/95 dark:bg-slate-900/95 backdrop-blur shrink-0">
       <div className="flex items-center gap-2 min-w-0 flex-1">
         {onBack && (
           <Button
@@ -140,13 +148,13 @@ export const ChatHeader = ({ conversation, onBack, onOpenDetails }: ChatHeaderPr
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-sm truncate">{name}</p>
+            <p className="font-semibold text-sm truncate text-foreground dark:text-white">{name}</p>
             <p
               className={cn(
                 "text-xs truncate",
                 other?.isOnline && !isGroup
-                  ? "text-green-600 font-medium"
-                  : "text-muted-foreground"
+                  ? "text-green-600 dark:text-green-400 font-medium"
+                  : "text-muted-foreground dark:text-slate-400"
               )}
             >
               {subtitle}

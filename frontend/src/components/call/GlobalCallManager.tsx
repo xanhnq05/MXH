@@ -1,57 +1,47 @@
 // Hook wrapper kết nối useCall với useCallStore — dùng trong App level
 // để quản lý cuộc gọi toàn cục (mọi page đều có thể nghe và xử lý).
-import React, { useEffect, useCallback } from "react";
+import React, { createContext, useContext } from "react";
 import { useCallStore } from "@/stores/useCallStore";
-import { useAuthStore } from "@/stores/useAuthStore";
 import { useCall as useCallCore, CallSignalPayload } from "@/hooks/useCall";
 import CallModal from "@/components/call/CallModal";
 import IncomingCallModal from "@/components/call/IncomingCallModal";
 
-export const useCallManager = () => {
-  const { user } = useAuthStore();
-  const { setIncomingCall } = useCallStore();
-
-  const onIncoming = useCallback(
-    (p: CallSignalPayload) => {
-      setIncomingCall(p);
-    },
-    [setIncomingCall]
-  );
-
-  return useCallCore({
-    currentUserId: user?._id || "",
-    onIncoming,
-  });
-};
-
 interface GlobalCallManagerProps {
-  children: React.ReactNode;
+    children: React.ReactNode;
 }
 
-export const GlobalCallManager = ({ children }: GlobalCallManagerProps) => {
-  const call = useCallManager();
-  const { active, incoming } = useCallStore();
+// Context chia sẻ call actions (startDirectCall, acceptCall, ...) cho mọi component
+const CallManagerContext = createContext<ReturnType<typeof useCallCore> | null>(null);
 
-  useEffect(() => {
-    if (call.active) {
-      useCallStore.setState({ active: call.active });
-    } else {
-      useCallStore.setState({ active: null });
+/** Hook dùng trong các component con (vd: ChatHeader) để gọi startDirectCall */
+export const useCallManager = () => {
+    const ctx = useContext(CallManagerContext);
+    if (!ctx) {
+        throw new Error("useCallManager must be used within <GlobalCallManager>");
     }
-  }, [call.active]);
+    return ctx;
+};
+
+export const GlobalCallManager = ({ children }: GlobalCallManagerProps) => {
+  const { setIncomingCall, incoming } = useCallStore();
+
+  const call = useCallCore({
+    currentUserId: "",
+    onIncoming: (p) => setIncomingCall(p),
+  });
 
   return (
-    <>
+    <CallManagerContext.Provider value={call}>
       {children}
       <IncomingCallModal
         incoming={incoming}
         onAccept={(p) => {
           call.acceptCall(p);
-          useCallStore.getState().setIncomingCall(null);
+          setIncomingCall(null);
         }}
         onReject={(p) => {
           call.rejectCall(p);
-          useCallStore.getState().setIncomingCall(null);
+          setIncomingCall(null);
         }}
       />
       {call.active && (
@@ -76,6 +66,6 @@ export const GlobalCallManager = ({ children }: GlobalCallManagerProps) => {
           onEnd={call.endCurrentCall}
         />
       )}
-    </>
+    </CallManagerContext.Provider>
   );
 };

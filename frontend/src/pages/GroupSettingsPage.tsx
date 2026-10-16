@@ -30,6 +30,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { chatService } from "@/services/chat.service";
 import { userService } from "@/services/user.service";
 import { toast } from "sonner";
+import { useConfirm, usePrompt } from "@/components/providers/ConfirmDialogProvider";
 import {
   ArrowLeft,
   Crown,
@@ -49,6 +50,8 @@ const GroupSettingsPage = () => {
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const { user: me } = useAuthStore();
+  const { confirm } = useConfirm();
+  const { prompt } = usePrompt();
   const [conv, setConv] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -154,7 +157,13 @@ const GroupSettingsPage = () => {
 
   const handleSetNickname = async (userId: string, currentNick: string) => {
     if (!conv) return;
-    const nick = prompt("Biệt danh (để trống để xoá):", currentNick || "");
+    const nick = await prompt({
+      title: "Đặt biệt danh",
+      message: "Để trống nếu muốn xoá biệt danh hiện tại.",
+      defaultValue: currentNick || "",
+      placeholder: "Biệt danh mới...",
+      confirmLabel: "Lưu",
+    });
     if (nick === null) return;
     try {
       // API hiện chỉ set cho chính mình, ta dùng tạm chính mình

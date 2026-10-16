@@ -1,6 +1,6 @@
 // MainLayout — Redesign với theme cam GreenX #FF6B35 + #FF9F43
 import { useState, useEffect } from "react";
-import { Outlet, Link, useNavigate, useLocation } from "react-router";
+import { Outlet, Link, useLocation } from "react-router";
 import {
   Home,
   Search,
@@ -9,16 +9,15 @@ import {
   Bell,
   Settings,
   LogOut,
-  Moon,
-  Sun,
   Menu,
   X,
   User,
+  Shield,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { useThemeStore } from "@/stores/useThemeStore";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import { cn } from "@/lib/utils";
 import { isAdminUser } from "@/lib/helpers";
@@ -43,9 +42,7 @@ const getInitials = (name?: string) =>
 
 const MainLayout = () => {
   const { user, signOut } = useAuthStore();
-  const { theme, setTheme } = useThemeStore();
   const { unreadCount } = useNotificationStore();
-  const navigate = useNavigate();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -63,9 +60,9 @@ const MainLayout = () => {
   }, []);
 
   const Sidebar = ({ onClose }: { onClose?: () => void }) => (
-    <div className="h-full w-64 flex flex-col bg-white border-r border-orange-100">
+    <div className="h-full w-64 flex flex-col bg-white dark:bg-slate-900 border-r border-orange-100 dark:border-slate-800">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-orange-100">
+      <div className="px-5 py-5 border-b border-orange-100 dark:border-slate-800">
         <Link
           to="/"
           className="text-2xl font-black tracking-tight"
@@ -92,7 +89,7 @@ const MainLayout = () => {
                 "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150",
                 active
                   ? "bg-greenx-gradient text-white shadow-sm"
-                  : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                  : "text-slate-600 hover:bg-orange-50 hover:text-orange-600 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-orange-400"
               )}
             >
               <item.icon className="h-5 w-5 shrink-0" />
@@ -106,24 +103,25 @@ const MainLayout = () => {
           );
         })}
         {isAdminUser(user) && (
-          <Link
-            to="/admin/media"
+          <a
+            href={import.meta.env.VITE_ADMIN_URL || "http://localhost:3001"}
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={onClose}
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150",
-              location.pathname.startsWith("/admin")
-                ? "bg-greenx-gradient text-white shadow-sm"
-                : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+              "text-slate-600 hover:bg-orange-50 hover:text-orange-600 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-orange-400"
             )}
           >
-            <Settings className="h-5 w-5 shrink-0" />
-            <span className="flex-1">Quản trị Media</span>
-          </Link>
+            <Shield className="h-5 w-5 shrink-0" />
+            <span className="flex-1">Quản trị (Admin)</span>
+            <span className="text-[10px] text-muted-foreground">↗</span>
+          </a>
         )}
       </nav>
 
       {/* User section */}
-      <div className="border-t border-orange-100 p-3">
+      <div className="border-t border-orange-100 dark:border-slate-800 p-3">
         <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-orange-50 cursor-pointer group transition-colors">
           <Avatar className="h-10 w-10 ring-2 ring-orange-100 group-hover:ring-orange-300">
             <AvatarImage src={user?.avatarUrl} />
@@ -148,26 +146,15 @@ const MainLayout = () => {
       </div>
 
       {/* Theme toggle */}
-      <div className="px-5 py-3 border-t border-orange-100 flex items-center justify-between">
-        <span className="text-xs text-slate-400 font-medium">Chế độ</span>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="h-8 w-8 rounded-lg hover:bg-orange-50 text-slate-500 hover:text-orange-600"
-        >
-          {theme === "dark" ? (
-            <Sun className="h-4 w-4" />
-          ) : (
-            <Moon className="h-4 w-4" />
-          )}
-        </Button>
+      <div className="px-5 py-3 border-t border-orange-100 dark:border-slate-800 flex items-center justify-between">
+        <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">Chế độ</span>
+        <ThemeToggle variant="icon" />
       </div>
     </div>
   );
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
       {/* Desktop sidebar */}
       <div className="hidden lg:flex shrink-0">
         <Sidebar />
@@ -197,7 +184,7 @@ const MainLayout = () => {
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile top bar */}
-        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-orange-100 shrink-0">
+        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 border-b border-orange-100 dark:border-slate-800 shrink-0">
           <Button
             variant="ghost"
             size="icon"

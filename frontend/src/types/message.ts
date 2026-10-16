@@ -19,6 +19,9 @@ export interface Conversation {
   lastMessageAt: string;
   pinnedMessages?: string[];
   mutedBy?: string[];
+  // Nhóm mở (anyone with joinLink can join) | kín (chỉ mời)
+  joinType?: "open" | "closed";
+  joinLink?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -52,6 +55,9 @@ export interface Message {
   duration?: number;
   stickerId?: string;
   stickerUrl?: string;
+  // share_post
+  postId?: string;
+  postUrl?: string;
   replyTo?: Message | string | null;
   isEncrypted?: boolean;
   iv?: string;
@@ -60,7 +66,16 @@ export interface Message {
   isPinned?: boolean;
   pinnedBy?: string;
   pinnedAt?: string;
-  deliveries?: { userId: string; deliveredAt: string; readAt?: string | null }[];
+  /**
+   * deliveries: trạng thái "đã nhận" + "đã đọc" của từng member.
+   * - deliveredAt: server đã push message tới client của user
+   * - readAt: user đã mở conversation và gọi markRead
+   */
+  deliveries?: {
+    userId: User | string;
+    deliveredAt: string;
+    readAt?: string | null;
+  }[];
   createdAt: string;
   updatedAt: string;
 }

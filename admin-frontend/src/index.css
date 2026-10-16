@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ====================================================================
+   Enterprise Admin Theme — Dark + Light modes
+   - Light: Crisp enterprise (slate-50 bg, white cards, blue-600 primary)
+   - Dark:  Deep professional (zinc-950 bg, zinc-900 cards, blue-500 primary)
+   ==================================================================== */
+
+@layer base {
+  :root {
+    /* Light mode — Crisp enterprise */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --primary-50: 214 100% 97%;
+    --primary-100: 214 95% 93%;
+    --primary-200: 213 97% 87%;
+    --primary-500: 217 91% 60%;
+    --primary-600: 221 83% 53%;
+    --primary-700: 224 76% 48%;
+    --primary-900: 224 64% 33%;
+
+    --secondary: 215 20% 95%;
+    --secondary-foreground: 222 47% 11%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%;
+
+    --sidebar: 222 47% 11%;
+    --sidebar-foreground: 210 40% 95%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-border: 217 33% 17%;
+
+    --chart-1: 217 91% 60%;
+    --chart-2: 142 71% 45%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 271 81% 56%;
+    --chart-5: 0 72% 51%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* Dark mode — Deep professional */
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 98%;
+
+    --muted: 217 33% 14%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 33% 14%;
+    --accent-foreground: 210 40% 98%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --primary-50: 222 47% 11%;
+    --primary-100: 217 33% 17%;
+    --primary-200: 217 33% 22%;
+    --primary-500: 217 91% 60%;
+    --primary-600: 217 91% 65%;
+    --primary-700: 217 91% 70%;
+    --primary-900: 214 95% 93%;
+
+    --secondary: 217 33% 14%;
+    --secondary-foreground: 210 40% 98%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 55%;
+    --warning-foreground: 222 47% 11%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 217 91% 60%;
+
+    --sidebar: 222 47% 5%;
+    --sidebar-foreground: 210 40% 92%;
+    --sidebar-accent: 217 33% 11%;
+    --sidebar-border: 217 33% 11%;
+
+    --chart-1: 217 91% 60%;
+    --chart-2: 142 71% 50%;
+    --chart-3: 38 92% 55%;
+    --chart-4: 271 81% 65%;
+    --chart-5: 0 72% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted));
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.4);
+  }
+}

@@ -2,12 +2,14 @@
 
 import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
+import Block from "../models/Block.js";
 import { ApiError } from "../utils/ApiError.js";
 import { paginate } from "../utils/pagination.js";
 import { uploadService } from "./upload.service.js";
 import { emitToConversation, emitToUser } from "../libs/socket.js";
 import { notificationService } from "./notification.service.js";
 import { checkMediaRateLimit } from "./mediaRateLimit.service.js";
+import { assertNotBlocked } from "../utils/blockGuard.js";
 
 const assertMember = async (meId, convId) => {
   const conv = await Conversation.findById(convId);
@@ -17,9 +19,23 @@ const assertMember = async (meId, convId) => {
   return conv;
 };
 
+/**
+ * Với conv direct (2 người), check block 2 chiều giữa me và other.
+ * Nếu 1 trong 2 chặn nhau → từ chối gửi/nhận.
+ */
+const assertNotBlockedInConversation = async (meId, conv) => {
+  if (conv.type !== "direct") return;
+  const other = conv.members.find(
+    (m) => m.userId.toString() !== meId.toString()
+  );
+  if (!other) return;
+  await assertNotBlocked(meId, other.userId, { strict: true });
+};
+
 export const messageService = {
   async list(meId, convId, { cursor, limit = 30 } = {}) {
-    await assertMember(meId, convId);
+    const conv = await assertMember(meId, convId);
+    await assertNotBlockedInConversation(meId, conv);
     const { items, nextCursor } = await paginate({
       model: Message,
       filter: { conversationId: convId, deletedAt: null },
@@ -31,6 +47,8 @@ export const messageService = {
           select: "username displayName avatarUrl",
         },
         { path: "replyTo" },
+        // Populate deliveries.userId để frontend hiển thị "xem chi tiết"
+        { path: "deliveries.userId", select: "username displayName avatarUrl" },
       ],
     });
     return { items, nextCursor };
@@ -42,21 +60,59 @@ export const messageService = {
     me.lastReadMessageId = lastMessageId;
     await conv.save();
 
-    await Message.updateMany(
+    const readAt = new Date();
+    // Update tất cả message từ trước đến lastMessageId:
+    // - Thêm delivered+read vào deliveries (nếu chưa có)
+    const result = await Message.updateMany(
       {
         conversationId: convId,
         _id: { $lte: lastMessageId },
         "deliveries.userId": { $ne: meId },
+        senderId: { $ne: meId }, // không tự ghi read cho mình
       },
-      { $push: { deliveries: { userId: meId, deliveredAt: new Date(), readAt: new Date() } } }
+      {
+        $push: {
+          deliveries: {
+            userId: meId,
+            deliveredAt: readAt,
+            readAt,
+          },
+        },
+      }
     );
 
+    // Lấy danh sách messageId bị ảnh hưởng (để thông báo sender)
+    const affectedMessages = await Message.find({
+      conversationId: convId,
+      _id: { $lte: lastMessageId },
+      "deliveries.userId": meId,
+      senderId: { $ne: meId },
+    })
+      .select("_id senderId")
+      .lean();
+
+    // Broadcast read event cho cả conv (để các client cập nhật UI)
     emitToConversation(convId, "message:read", {
       conversationId: convId,
       userId: meId,
       lastMessageId,
+      readAt: readAt.toISOString(),
     });
-    return { success: true };
+
+    // Đồng thời thông báo riêng cho từng sender (để update tick trong conversation list)
+    const senderIds = new Set(affectedMessages.map((m) => m.senderId.toString()));
+    for (const sid of senderIds) {
+      emitToUser(sid, "message:read:by-user", {
+        conversationId: convId,
+        readerId: meId,
+        readAt: readAt.toISOString(),
+      });
+    }
+
+    return {
+      success: true,
+      updatedCount: result.modifiedCount || 0,
+    };
   },
 
   /** Gửi tin nhắn — gọi từ socket (HTTP cũng có thể gọi) */
@@ -73,6 +129,8 @@ export const messageService = {
       duration,
       stickerId,
       stickerUrl,
+      postId,
+      postUrl,
       replyTo,
       isEncrypted = false,
       iv,
@@ -81,6 +139,7 @@ export const messageService = {
     } = payload;
 
     const conv = await assertMember(meId, conversationId);
+    await assertNotBlockedInConversation(meId, conv);
 
     // Rate limit cho sticker/GIF (chỉ áp dụng cho media, không ảnh hưởng text/file/image)
     if (type === "sticker" || type === "gif") {
@@ -107,6 +166,8 @@ export const messageService = {
       duration,
       stickerId,
       stickerUrl,
+      postId: type === "share_post" ? postId : undefined,
+      postUrl: type === "share_post" ? postUrl : undefined,
       replyTo,
       isEncrypted,
       iv,
@@ -121,8 +182,35 @@ export const messageService = {
     conv.lastMessageAt = message.createdAt;
     await conv.save();
 
+    // Invalidate conversation list cache (lastMessageAt thay doi)
+    try {
+      const cache = (await import("../libs/cache.js")).default;
+      await Promise.allSettled(
+        conv.members.map((m) =>
+          cache.delPattern(`conversations:user:${m.userId.toString()}:*`)
+        )
+      );
+    } catch {
+      // Silent - cache optional
+    }
+
     // Realtime broadcast
     emitToConversation(conversationId, "message:new", message);
+
+    // Broadcast "delivered" event cho các thành viên (trừ sender) —
+    // đây là tín hiệu server đã push message, không đợi client ack.
+    // Frontend dùng event này để hiển thị 2 tick "đã nhận" cho sender.
+    const memberIds = conv.members
+      .map((m) => m.userId.toString())
+      .filter((uid) => uid !== meId.toString());
+    for (const uid of memberIds) {
+      emitToUser(uid, "message:delivered", {
+        messageId: message._id.toString(),
+        conversationId: conversationId.toString(),
+        recipientId: uid,
+        deliveredAt: new Date().toISOString(),
+      });
+    }
 
     // Notification cho các thành viên khác (không gửi cho người mute)
     for (const m of conv.members) {
@@ -147,7 +235,8 @@ export const messageService = {
    */
   async uploadOnly(meId, conversationId, file) {
     if (!file) throw new ApiError(400, "Thiếu file");
-    await assertMember(meId, conversationId);
+    const conv = await assertMember(meId, conversationId);
+    await assertNotBlockedInConversation(meId, conv);
     const folder = `messages/${conversationId}`;
     const uploaded = await uploadService.uploadFile({
       buffer: file.buffer,

@@ -20,6 +20,23 @@ import { connectDB } from "../src/libs/db.js";
 import * as mailMod from "../src/services/mail.service.js";
 import * as uploadMod from "../src/services/upload.service.js";
 
+// SECURITY: Suu dung mongodb-memory-server neu khong co TEST_MONGODB_URI.
+// Tranh hardcode production credentials trong source code.
+let memoryServer = null;
+const ensureMongoUri = async () => {
+  if (process.env.MONGODB_URI) return;
+  try {
+    const { MongoMemoryServer } = await import("mongodb-memory-server");
+    memoryServer = await MongoMemoryServer.create();
+    process.env.MONGODB_URI = memoryServer.getUri();
+  } catch (e) {
+    throw new Error(
+      "TEST_MONGODB_URI chua duoc set va mongodb-memory-server khong kha dung. " +
+        "Set TEST_MONGODB_URI trong CI env hoac .env (gitignored) de chay test."
+    );
+  }
+};
+
 // Patch mail service ngay khi load setupE2E
 const _sendOtp = mailMod.mailService.sendOtp.bind(mailMod.mailService);
 const _sendGeneric = mailMod.mailService.sendGeneric.bind(mailMod.mailService);
@@ -75,6 +92,7 @@ export const buildApp = () => {
 };
 
 export const setupTestDB = async () => {
+  await ensureMongoUri();
   await connectDB();
 };
 
@@ -87,4 +105,15 @@ export const clearTestDB = async () => {
 
 export const closeTestDB = async () => {
   await mongoose.disconnect();
+  if (memoryServer) {
+    await memoryServer.stop();
+    memoryServer = null;
+  }
+  // Cleanup Redis client de khong giu connection treo
+  try {
+    const { default: cache } = await import("../libs/cache.js");
+    await cache.disconnect();
+  } catch {
+    // ignore
+  }
 };

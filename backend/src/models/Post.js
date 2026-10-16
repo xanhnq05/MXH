@@ -36,6 +36,13 @@ const postSchema = new mongoose.Schema(
     // Danh sách userId đã like — dùng cho toggle nhanh + check "đã like chưa"
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
+    // Tags để filter bài viết (lowercase, không dấu, kebab-style)
+    tags: {
+      type: [String],
+      default: [],
+      index: true,
+    },
+
     // Soft delete: bài xoá vẫn giữ để thread comment không gãy
     deletedAt: { type: Date, default: null },
   },
@@ -44,8 +51,14 @@ const postSchema = new mongoose.Schema(
 
 postSchema.index({ createdAt: -1, _id: -1 });
 postSchema.index({ authorId: 1, createdAt: -1 });
+// Index phục vụ filter theo tag
+postSchema.index({ tags: 1, createdAt: -1 });
+// Index phục vụ filter theo năm (sử dụng createdAt)
 
-postSchema.methods.toClient = function () {
+postSchema.methods.toClient = function (meId = null) {
+  const isLiked = meId
+    ? this.likes.some((id) => id.toString() === meId.toString())
+    : false;
   return {
     _id: this._id,
     author: this.authorId,
@@ -55,6 +68,8 @@ postSchema.methods.toClient = function () {
     likeCount: this.likeCount,
     commentCount: this.commentCount,
     shareCount: this.shareCount,
+    tags: this.tags || [],
+    isLiked,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,
   };

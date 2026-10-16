@@ -52,6 +52,56 @@ export const useCall = ({ currentUserId, onIncoming, onEnded }: UseCallOptions) 
   const [duration, setDuration] = useState(0);
   const timerRef = useRef<number | null>(null);
 
+  // Stable refs so that cleanup functions always use current values
+  const activeRef = useRef(active);
+  const onEndedRef = useRef(onEnded);
+  useEffect(() => { activeRef.current = active; }, [active]);
+  useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
+
+  // Timer helpers — defined early so cleanup can use them
+  const startTimer = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    const startedAt = Date.now();
+    timerRef.current = window.setInterval(() => {
+      setDuration(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+  }, []);
+
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setDuration(0);
+  }, []);
+
+  // Core cleanup — defined as a stable ref-wrapped function
+  const cleanupCore = useCallback(async (status: "ended" | "rejected" | "missed" | "failed" = "ended") => {
+    const currentActive = activeRef.current;
+    try {
+      const callId = currentActive?.callId;
+      if (callId) {
+        callService.end(callId, status).catch(() => {});
+      }
+    } catch {
+      // ignore
+    }
+    peerRef.current?.close();
+    peerRef.current = null;
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    localStreamRef.current = null;
+    remoteStreamRef.current = null;
+    setLocalStream(null);
+    setRemoteStream(null);
+    stopTimer();
+    setActive(null);
+    onEndedRef.current?.();
+  }, [stopTimer]);
+
+  // Cleanup ref for socket listener callbacks (stable reference)
+  const cleanupRef = useRef(cleanupCore);
+  useEffect(() => { cleanupRef.current = cleanupCore; }, [cleanupCore]);
+
   // ============== SOCKET LISTENERS ==============
   useEffect(() => {
     const socket = getSocket();
@@ -82,11 +132,11 @@ export const useCall = ({ currentUserId, onIncoming, onEnded }: UseCallOptions) 
       }
     };
     const onReject = async (p: CallSignalPayload) => {
-      cleanup("rejected");
+      cleanupRef.current("rejected");
       toast.info("Cuộc gọi bị từ chối");
     };
     const onEnd = async () => {
-      cleanup("ended");
+      cleanupRef.current("ended");
     };
 
     socket.on("call:offer", onOffer);
@@ -108,50 +158,14 @@ export const useCall = ({ currentUserId, onIncoming, onEnded }: UseCallOptions) 
       socket.off("call:reject", onReject);
       socket.off("call:end", onEnd);
     };
-  }, [currentUserId, onIncoming]);
+  }, [currentUserId, onIncoming, startTimer]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount — use stable ref wrapper to avoid stale closure
   useEffect(() => {
     return () => {
-      cleanup("ended");
+      cleanupRef.current("ended");
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const startTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    const startedAt = Date.now();
-    timerRef.current = window.setInterval(() => {
-      setDuration(Math.floor((Date.now() - startedAt) / 1000));
-    }, 1000);
-  };
-
-  const stopTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setDuration(0);
-  };
-
-    const cleanup = useCallback(async (status: "ended" | "rejected" | "missed" | "failed" = "ended") => {
-    try {
-      const callId = active?.callId;
-      if (callId) {
-        callService.end(callId, status).catch(() => {});
-      }
-    } catch {}
-    peerRef.current?.close();
-    peerRef.current = null;
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    localStreamRef.current = null;
-    remoteStreamRef.current = null;
-    setLocalStream(null);
-    setRemoteStream(null);
-    stopTimer();
-    setActive(null);
-    onEnded?.();
-  }, [active, onEnded]);
 
   // ============== ACTIONS ==============
 
@@ -198,7 +212,7 @@ export const useCall = ({ currentUserId, onIncoming, onEnded }: UseCallOptions) 
                 candidate,
               });
             },
-            onClose: () => cleanup("ended"),
+            onClose: () => cleanupRef.current("ended"),
           },
         });
         peerRef.current = peer;
@@ -229,10 +243,10 @@ export const useCall = ({ currentUserId, onIncoming, onEnded }: UseCallOptions) 
         });
       } catch (err: any) {
         toast.error("Không thể bắt đầu cuộc gọi: " + (err.message || err));
-        cleanup("failed");
+        cleanupRef.current("failed");
       }
     },
-    [currentUserId, cleanup]
+    [currentUserId]
   );
 
   /** Chấp nhận cuộc gọi đến */
@@ -276,7 +290,7 @@ export const useCall = ({ currentUserId, onIncoming, onEnded }: UseCallOptions) 
                 candidate,
               });
             },
-            onClose: () => cleanup("ended"),
+            onClose: () => cleanupRef.current("ended"),
           },
         });
         peerRef.current = peer;
@@ -307,10 +321,10 @@ export const useCall = ({ currentUserId, onIncoming, onEnded }: UseCallOptions) 
         });
       } catch (err: any) {
         toast.error("Không thể chấp nhận cuộc gọi: " + (err.message || err));
-        cleanup("failed");
+        cleanupRef.current("failed");
       }
     },
-    [currentUserId, cleanup]
+    [currentUserId, startTimer]
   );
 
   /** Từ chối cuộc gọi */
@@ -340,8 +354,8 @@ export const useCall = ({ currentUserId, onIncoming, onEnded }: UseCallOptions) 
         conversationId: active.conversationId,
       });
     }
-    cleanup("ended");
-  }, [active, cleanup]);
+    cleanupRef.current("ended");
+  }, [active]);
 
   const toggleAudio = useCallback(() => {
     if (!peerRef.current || !localStreamRef.current) return;
@@ -370,6 +384,6 @@ export const useCall = ({ currentUserId, onIncoming, onEnded }: UseCallOptions) 
     endCurrentCall,
     toggleAudio,
     toggleVideo,
-    cleanup,
+    cleanup: cleanupCore,
   };
 };

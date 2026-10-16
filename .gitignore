@@ -1,0 +1,69 @@
+# ===== Dependencies =====
+node_modules/
+.pnp
+.pnp.js
+
+# ===== Build outputs =====
+dist/
+build/
+out/
+.vite/
+.next/
+.nuxt/
+
+# ===== Coverage & test artifacts =====
+coverage/
+*.lcov
+.nyc_output/
+junit.xml
+
+# ===== Logs =====
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ===== Environment & secrets =====
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+
+# ===== Editor / OS =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ===== Misc =====
+.cache/
+.tmp/
+tmp/
+.temp/
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+admin-frontend/vite.config.js
+admin-frontend/vite.config.d.ts
+
+# ===== Local prompt files (khong commit, chi dung de paste vao Cursor) =====
+update1.md
+update2.md
+update*.md
+!docs/**/*.md
+
+# ===== Cursor internal folders (per-skill, plugin state, dynamic tools) =====
+.cursor/
+
+# ===== Design system & local skill artifacts =====
+@design-system/
+@.cursor/
+@docs/

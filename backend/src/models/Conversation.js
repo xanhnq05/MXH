@@ -47,12 +47,33 @@ const conversationSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
+    // ===== Nhóm mở (anyone with link can join) =====
+    // joinType: "open" (mở - vào qua link) | "closed" (kín - phải được mời)
+    joinType: {
+      type: String,
+      enum: ["open", "closed"],
+      default: "closed",
+      index: true,
+    },
+    // Slug ngẫu nhiên dùng cho link mời, unique khi joinType=open
+    joinLink: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );
 
 conversationSchema.index({ "members.userId": 1, lastMessageAt: -1 });
 conversationSchema.index({ lastMessageAt: -1 });
+// Unique slug cho group mở (partial index)
+conversationSchema.index(
+  { joinLink: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { joinType: "open", joinLink: { $type: "string" } },
+  }
+);
 
 // Tính số thành viên thực sự (loại trừ những người đã rời nếu sau này mở rộng)
 conversationSchema.methods.memberCount = function () {

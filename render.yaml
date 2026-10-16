@@ -1,0 +1,62 @@
+services:
+  # ===== Backend (Node.js + Express + Socket.IO) =====
+  - type: web
+    name: mxh-backend
+    runtime: node
+    rootDir: backend
+    plan: starter           # $7/mo - đủ cho demo/dev. Production: standard ($25/mo)
+    region: singapore       # gần VN
+    branch: main
+    healthCheckPath: /api/health
+    autoDeploy: true
+    buildCommand: npm install --omit=dev --no-audit --no-fund
+    startCommand: node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000         # Render mặc định; container phải bind 0.0.0.0:PORT
+      - key: MONGODB_URI
+        sync: false          # nhập tay trong dashboard
+      - key: ACCESS_TOKEN_SECRET
+        generateValue: true  # Render tự sinh random 32 bytes
+      - key: REFRESH_TOKEN_SECRET
+        generateValue: true
+      - key: CLIENT_URL
+        value: https://greenx.app   # domain FE user (cập nhật sau khi có)
+      - key: ADMIN_CLIENT_URL
+        value: https://admin.greenx.app
+      - key: SUPABASE_BUCKET
+        value: GreenX
+      - key: SUPABASE_S3_ENDPOINT
+        value: https://tnbkodmuhoopgnynqmkm.storage.supabase.co/storage/v1/s3
+      - key: SUPABASE_S3_REGION
+        value: us-east-1
+      - key: SUPABASE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: SUPABASE_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: SUPABASE_PUBLIC_URL
+        value: https://tnbkodmuhoopgnynqmkm.storage.supabase.co/storage/v1/object/public
+      - key: GMAIL_USER
+        value: xanhnguyen05@gmail.com
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: E2EE_SERVER_KEY
+        generateValue: true
+      - key: ADMIN_EMAILS
+        value: xanhnguyen05@gmail.com
+      - key: ADMIN_USER_IDS
+        value: 6ad2418d037e238305c1bf87
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: mxh-redis
+          property: connectionString
+
+  # ===== Redis (BullMQ + cache + rate limit) =====
+  - type: redis
+    name: mxh-redis
+    plan: starter           # $10/mo
+    region: singapore
+    ipAllowList: []         # chỉ nội bộ Render truy cập

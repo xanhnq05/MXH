@@ -254,15 +254,20 @@ MXH/frontend/
 
 ```
 PORT=5001
-MONGODB_URI=mongodb+srv://xanhnguyen05_db_user:fBBdZcFpfceJ0rJ6@cluster0.iet1ejm.mongodb.net/banking?appName=Cluster0
+MONGODB_URI=YOUR_MONGODB_URI
 ACCESS_TOKEN_SECRET=<đã có>
 CLIENT_URL=http://localhost:5173
-SUPABASE_URL=https://tnbkodmuhoopgnynqmkm.supabase.co
-SUPABASE_PUBLISHABLE_KEY=sb_publishable_1FIsgR7HjOMIBgHip57ppw_8Bt_SGLG
-SUPABASE_SECRET_KEY=sb_secret_mlbPjLKKW9ffYzfh4CYT3w_kuWGTYhN
-SUPABASE_JWKS_URL=https://tnbkodmuhoopgnynqmkm.supabase.co/auth/v1/.well-known/jwks.json
-GMAIL_CLIENT_ID=ciiwrmrgbephhdwc
+SUPABASE_URL=YOUR_SUPABASE_URL
+SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SECRET_KEY=YOUR_SUPABASE_SECRET_KEY
+SUPABASE_JWKS_URL=https://YOUR_SUPABASE_PROJECT.supabase.co/auth/v1/.well-known/jwks.json
+GMAIL_CLIENT_ID=YOUR_GMAIL_CLIENT_ID
 ```
+
+> ⚠️ **QUAN TRỌNG — Bảo mật:**
+> - Giá trị gốc đã bị xoá khỏi tài liệu này vì đã từng bị commit vào lịch sử Git (public repo).
+> - Xem `docs/security-incident-credential-leak.md` để biết các bước thu hồi/thay mới cần thực hiện trên MongoDB Atlas, Supabase và Google Cloud Console.
+> - Không phục hồi giá trị cũ vào file này hoặc bất kỳ file tracked nào.
 
 > ⚠️ **Cần bổ sung (AI tự sinh, lưu .env):**
 > - `REFRESH_TOKEN_SECRET` (JWT cho refresh token — phải khác access)

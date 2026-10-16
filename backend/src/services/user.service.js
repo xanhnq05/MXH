@@ -34,6 +34,22 @@ export const userService = {
     return user;
   },
 
+  /** Lấy trạng thái hoạt động (isOnline + lastSeen) — check block chặt 2 chiều */
+  async getPresence(viewerId, targetId) {
+    if (viewerId.toString() === targetId.toString()) {
+      // Chính mình → trả thẳng
+      const me = await User.findById(targetId).select("isOnline lastSeen");
+      if (!me) throw new ApiError(404, "Người dùng không tồn tại");
+      return { isOnline: !!me.isOnline, lastSeen: me.lastSeen };
+    }
+    if (await isBlockedEitherWay(viewerId, targetId)) {
+      throw new ApiError(403, "Không thể xem trạng thái hoạt động");
+    }
+    const target = await User.findById(targetId).select("isOnline lastSeen");
+    if (!target) throw new ApiError(404, "Người dùng không tồn tại");
+    return { isOnline: !!target.isOnline, lastSeen: target.lastSeen };
+  },
+
   async search(viewerId, q, limit = 20) {
     if (!q || q.trim().length < 2) return [];
     const blocked = await Block.find({
@@ -217,6 +233,47 @@ export const userService = {
     const user = await User.findByIdAndUpdate(
       userId,
       { coverUrl: url, coverId: key },
+      { new: true }
+    ).select(publicProjection);
+    return user;
+  },
+
+  /**
+   * Xóa ảnh bìa → về mặc định (coverUrl = null, coverId = null)
+   * Cũng xóa file trên Supabase để tránh orphan.
+   */
+  async removeCover(userId) {
+    const old = await User.findById(userId).select("coverId");
+    if (old?.coverId) {
+      try {
+        await uploadService.deleteFile(old.coverId);
+      } catch (e) {
+        console.warn("[user.removeCover] delete old file failed:", e.message);
+      }
+    }
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { coverUrl: null, coverId: null },
+      { new: true }
+    ).select(publicProjection);
+    return user;
+  },
+
+  /**
+   * Xóa ảnh đại diện → về mặc định.
+   */
+  async removeAvatar(userId) {
+    const old = await User.findById(userId).select("avatarId");
+    if (old?.avatarId) {
+      try {
+        await uploadService.deleteFile(old.avatarId);
+      } catch (e) {
+        console.warn("[user.removeAvatar] delete old file failed:", e.message);
+      }
+    }
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { avatarUrl: null, avatarId: null },
       { new: true }
     ).select(publicProjection);
     return user;

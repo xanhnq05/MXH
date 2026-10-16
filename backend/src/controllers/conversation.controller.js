@@ -3,7 +3,12 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const conversationController = {
   list: asyncHandler(async (req, res) => {
-    res.json({ conversations: await chatService.listForUser(req.user._id) });
+    res.json(
+      await chatService.listForUser(req.user._id, {
+        cursor: req.query.cursor,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+      })
+    );
   }),
 
   getOrCreateDirect: asyncHandler(async (req, res) => {
@@ -23,6 +28,13 @@ export const conversationController = {
 
   getById: asyncHandler(async (req, res) => {
     res.json({ conversation: await chatService.getById(req.user._id, req.params.id) });
+  }),
+
+  joinByLink: asyncHandler(async (req, res) => {
+    const { joinLink } = req.body;
+    res.json({
+      conversation: await chatService.joinByLink(req.user._id, joinLink),
+    });
   }),
 
   updateGroup: asyncHandler(async (req, res) => {

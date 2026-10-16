@@ -40,7 +40,13 @@ router.post(
 );
 
 router.get("/feed", postController.feed);
+router.get("/search", postController.search);
+router.get("/by-user/:userId/years", postController.userYears);
+router.get("/by-user/:userId/tags", postController.userTags);
+router.get("/by-user/:userId", postController.listByUser);
 router.get("/:id", postController.getById);
+// Lấy danh sách user đã like - đặt trước /:id/like để tránh conflict
+router.get("/:id/likers", postController.likers);
 router.patch("/:id", validate(updatePostSchema), postController.update);
 router.delete("/:id", postController.remove);
 

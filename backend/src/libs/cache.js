@@ -3,18 +3,56 @@
 // Trong test: tu dong mock de khong can Redis that.
 
 import Redis from "ioredis";
-import { env } from "../configs/env.config.js";
-
-const isTest = process.env.NODE_ENV === "test";
 
 // Khi REDIS_URL khong duoc set -> lazy: khong tao connection, moi method tra ve safe no-op
+// Trong test: van co the su dung Redis that neu REDIS_URL duoc set (test integration)
+// Neu khong co REDIS_URL trong test: skip (mac dinh).
 let client = null;
 let connected = false;
 let connecting = false;
 
+// ===== Cache metric (in-memory counters) =====
+// Theo doi hit/miss de debug hieu nang. Reset moi 24h hoac khi restart.
+let hits = 0;
+let misses = 0;
+let errors = 0;
+let lastResetAt = Date.now();
+
+export const getMetrics = () => ({
+  hits,
+  misses,
+  errors,
+  hitRate: hits + misses > 0 ? (hits / (hits + misses) * 100).toFixed(2) : "0.00",
+  uptimeMs: Date.now() - lastResetAt,
+  available: isCacheAvailableInternal(),
+});
+
+export const resetMetrics = () => {
+  hits = 0;
+  misses = 0;
+  errors = 0;
+  lastResetAt = Date.now();
+};
+
+/** Disconnect Redis client (dung trong test cleanup) */
+export const disconnect = async () => {
+  if (client) {
+    try {
+      await client.quit();
+    } catch {
+      // ignore - co the client da dong
+    }
+    client = null;
+    connected = false;
+    connecting = false;
+  }
+};
+
+const isCacheAvailableInternal = () => Boolean(client && connected);
+
 const url = process.env.REDIS_URL || "";
 
-if (url && !isTest) {
+if (url) {
   client = new Redis(url, {
     maxRetriesPerRequest: 2,
     enableOfflineQueue: false,
@@ -56,15 +94,21 @@ if (url && !isTest) {
 }
 
 /** Kiem tra cache co san khong */
-export const isCacheAvailable = () => Boolean(client && connected);
+export const isCacheAvailable = () => isCacheAvailableInternal();
 
 /** Lay gia tri tu cache (JSON parse) */
 export const cacheGet = async (key) => {
   if (!isCacheAvailable()) return null;
   try {
     const raw = await client.get(key);
-    return raw ? JSON.parse(raw) : null;
+    if (raw) {
+      hits++;
+      return JSON.parse(raw);
+    }
+    misses++;
+    return null;
   } catch (e) {
+    errors++;
     return null;
   }
 };
@@ -76,6 +120,7 @@ export const cacheSet = async (key, value, ttlSec = 60) => {
     await client.set(key, JSON.stringify(value), "EX", ttlSec);
     return true;
   } catch (e) {
+    errors++;
     return false;
   }
 };
@@ -156,4 +201,7 @@ export default {
   wrap: cacheWrap,
   isAvailable: isCacheAvailable,
   ping,
+  getMetrics,
+  resetMetrics,
+  disconnect,
 };
