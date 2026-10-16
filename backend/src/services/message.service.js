@@ -7,6 +7,7 @@ import { paginate } from "../utils/pagination.js";
 import { uploadService } from "./upload.service.js";
 import { emitToConversation, emitToUser } from "../libs/socket.js";
 import { notificationService } from "./notification.service.js";
+import { checkMediaRateLimit } from "./mediaRateLimit.service.js";
 
 const assertMember = async (meId, convId) => {
   const conv = await Conversation.findById(convId);
@@ -81,6 +82,18 @@ export const messageService = {
 
     const conv = await assertMember(meId, conversationId);
 
+    // Rate limit cho sticker/GIF (chỉ áp dụng cho media, không ảnh hưởng text/file/image)
+    if (type === "sticker" || type === "gif") {
+      const rl = checkMediaRateLimit(meId.toString());
+      if (!rl.allowed) {
+        throw new ApiError(
+          429,
+          rl.reason || "Bạn gửi sticker/GIF quá nhanh. Vui lòng chờ một chút.",
+          { retryAfterMs: rl.retryAfterMs }
+        );
+      }
+    }
+
     const message = await Message.create({
       conversationId,
       senderId: meId,
@@ -116,7 +129,6 @@ export const messageService = {
       const uid = m.userId.toString();
       if (uid === meId.toString()) continue;
       if (conv.mutedBy.some((id) => id.toString() === uid)) continue;
-      // Trừ direct chat mute (chỉ là không bận tâm)
       await notificationService.push({
         recipientId: uid,
         senderId: meId,
@@ -128,7 +140,36 @@ export const messageService = {
     return message;
   },
 
-  /** Upload file/voice/image rồi tạo message */
+  /**
+   * Upload file lên storage, KHÔNG tạo message.
+   * Trả về metadata để client dùng kèm socket emit `message:send`.
+   * Đây là endpoint khuyến nghị: tránh double-upload và double-message.
+   */
+  async uploadOnly(meId, conversationId, file) {
+    if (!file) throw new ApiError(400, "Thiếu file");
+    await assertMember(meId, conversationId);
+    const folder = `messages/${conversationId}`;
+    const uploaded = await uploadService.uploadFile({
+      buffer: file.buffer,
+      originalName: file.originalname,
+      mimetype: file.mimetype,
+      folder,
+      userId: meId,
+    });
+    return {
+      url: uploaded.url,
+      key: uploaded.key,
+      size: uploaded.size,
+      mimeType: file.mimetype,
+      originalName: file.originalname,
+    };
+  },
+
+  /**
+   * Legacy: upload file rồi tạo message ngay (1-step).
+   * Tồn tại để tương thích ngược. Khuyến nghị dùng uploadOnly + message:send.
+   * @deprecated
+   */
   async uploadAndSend(meId, conversationId, file, payload = {}) {
     if (!file) throw new ApiError(400, "Thiếu file");
     const folder = `messages/${conversationId}`;
@@ -142,8 +183,8 @@ export const messageService = {
     const type = file.mimetype.startsWith("video")
       ? "voice"
       : file.mimetype.startsWith("image")
-      ? "image"
-      : "file";
+        ? "image"
+        : "file";
     return this.send(meId, {
       conversationId,
       type,

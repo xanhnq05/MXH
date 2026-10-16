@@ -14,6 +14,7 @@ import notificationRoute from "../src/routes/notification.route.js";
 import friendshipRoute from "../src/routes/friendship.route.js";
 import stickerRoute from "../src/routes/sticker.route.js";
 import gifRoute from "../src/routes/gif.route.js";
+import adminRoute from "../src/routes/admin.route.js";
 import { errorMiddleware, notFoundMiddleware } from "../src/middlewares/error.middleware.js";
 import { connectDB } from "../src/libs/db.js";
 import * as mailMod from "../src/services/mail.service.js";
@@ -67,6 +68,7 @@ export const buildApp = () => {
   app.use("/api/friends", friendshipRoute);
   app.use("/api/stickers", stickerRoute);
   app.use("/api/gifs", gifRoute);
+  app.use("/api/admin", adminRoute);
   app.use(notFoundMiddleware);
   app.use(errorMiddleware);
   return app;

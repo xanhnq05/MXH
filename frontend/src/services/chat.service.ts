@@ -31,6 +31,32 @@ export const chatService = {
     api.get(`/messages/${conversationId}/messages${cursor ? `?cursor=${cursor}` : ""}`).then((r) => r.data as { items: Message[]; nextCursor: string | null }),
   sendMessage: (conversationId: string, payload: any) =>
     api.post(`/messages/${conversationId}/messages`, payload).then((r) => r.data.message as Message),
+
+  /**
+   * Upload file (ảnh/tệp/voice) lên storage, KHÔNG tạo message.
+   * Trả về metadata để client dùng kèm `socket.emit("message:send", { type, fileUrl, ... })`.
+   * Khuyến nghị dùng cách này thay vì gọi thẳng endpoint cũ tạo 2 message.
+   */
+  uploadFile: (conversationId: string, file: File, content?: string) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (content) fd.append("content", content);
+    return api.post(`/messages/${conversationId}/upload`, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then((r) => r.data.file as {
+      url: string;
+      key: string;
+      size: number;
+      mimeType: string;
+      originalName: string;
+    });
+  },
+
+  /**
+   * Legacy: upload + tạo message ngay (deprecated).
+   * Tồn tại để tương thích ngược với code cũ.
+   * @deprecated Dùng uploadFile + socket.emit("message:send").
+   */
   uploadMessageFile: (conversationId: string, file: File, content?: string, duration?: number) => {
     const fd = new FormData();
     fd.append("file", file);

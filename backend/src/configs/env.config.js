@@ -41,6 +41,10 @@ export const env = {
 
   // E2EE
   E2EE_SERVER_KEY: process.env.E2EE_SERVER_KEY,
+
+  // Admin allowlist (CSV)
+  ADMIN_EMAILS: process.env.ADMIN_EMAILS,
+  ADMIN_USER_IDS: process.env.ADMIN_USER_IDS,
 };
 
 function msFromString(s) {

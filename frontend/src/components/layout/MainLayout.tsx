@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import { cn } from "@/lib/utils";
+import { isAdminUser } from "@/lib/helpers";
 
 const navItems = [
   { icon: Home, label: "Trang chủ", path: "/" },
@@ -104,6 +105,21 @@ const MainLayout = () => {
             </Link>
           );
         })}
+        {isAdminUser(user) && (
+          <Link
+            to="/admin/media"
+            onClick={onClose}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150",
+              location.pathname.startsWith("/admin")
+                ? "bg-greenx-gradient text-white shadow-sm"
+                : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+            )}
+          >
+            <Settings className="h-5 w-5 shrink-0" />
+            <span className="flex-1">Quản trị Media</span>
+          </Link>
+        )}
       </nav>
 
       {/* User section */}

@@ -68,6 +68,33 @@ export const setupSocket = (httpServer) => {
       socket.leave(`conversation:${conversationId}`);
     });
 
+    // message:send — client emit khi đã có metadata (text / sticker / gif / sau khi upload file).
+    // Service sẽ tạo Message, broadcast và notification.
+    socket.on("message:send", async (payload, ack) => {
+      try {
+        if (!payload || !payload.conversationId) {
+          if (typeof ack === "function") {
+            ack({ ok: false, error: "Thiếu conversationId" });
+          }
+          return;
+        }
+        const { messageService } = await import("../services/message.service.js");
+        const msg = await messageService.send(userId, payload);
+        if (typeof ack === "function") {
+          ack({ ok: true, message: msg });
+        }
+      } catch (err) {
+        if (typeof ack === "function") {
+          ack({
+            ok: false,
+            status: err?.statusCode || 500,
+            error: err?.message || "Gửi thất bại",
+            retryAfterMs: err?.details?.retryAfterMs,
+          });
+        }
+      }
+    });
+
     // Typing
     socket.on("typing:start", ({ conversationId }) => {
       socket.to(`conversation:${conversationId}`).emit("typing:start", {

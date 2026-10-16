@@ -15,11 +15,29 @@ router.post(
   validate(sendMessageSchema),
   messageController.send
 );
+
+/**
+ * Upload file/ảnh/voice chỉ để lấy URL/key/size.
+ * KHÔNG tạo message — tránh double-upload và double-message.
+ * Client phải emit `message:send` qua socket sau khi upload xong.
+ */
 router.post(
-  "/:conversationId/messages/upload",
+  "/:conversationId/upload",
   uploadMiddleware.single("file"),
   messageController.upload
 );
+
+/**
+ * Legacy: upload + tạo message trong 1 bước (đã deprecated).
+ * Endpoint cũ `/messages/upload` vẫn hoạt động để tương thích ngược.
+ * @deprecated Dùng `/upload` rồi `socket.emit("message:send")`.
+ */
+router.post(
+  "/:conversationId/messages/upload",
+  uploadMiddleware.single("file"),
+  messageController.uploadAndSend
+);
+
 router.post(
   "/:conversationId/read",
   validate(markReadSchema),

@@ -14,8 +14,10 @@ import ChatPage from "./pages/ChatPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import SearchPage from "./pages/SearchPage";
 import GroupSettingsPage from "./pages/GroupSettingsPage";
+import AdminMediaPage from "./pages/AdminMediaPage";
 import MainLayout from "./components/layout/MainLayout";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import AdminRoute from "./components/auth/AdminRoute";
 import { SocketProvider } from "./components/providers/SocketProvider";
 import { ThemeProvider } from "./components/providers/ThemeProvider";
 import { GlobalCallManager } from "./components/call/GlobalCallManager";
@@ -51,6 +53,14 @@ function App() {
             <Route path="/chat/:conversationId/settings" element={<GroupSettingsPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/search" element={<SearchPage />} />
+            <Route
+              path="/admin/media"
+              element={
+                <AdminRoute>
+                  <AdminMediaPage />
+                </AdminRoute>
+              }
+            />
           </Route>
         </Routes>
       </BrowserRouter>

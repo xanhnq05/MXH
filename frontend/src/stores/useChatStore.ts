@@ -20,6 +20,10 @@ interface ChatState {
   fetchConversations: () => Promise<void>;
   setActiveConversation: (id: string | null) => void;
   fetchMessages: (conversationId: string) => Promise<void>;
+  /**
+   * Gửi tin nhắn. Ưu tiên socket `message:send` (kèm ack để biết kết quả),
+   * fallback HTTP `POST /messages/:id/messages` khi socket chưa connect.
+   */
   sendMessage: (conversationId: string, payload: Partial<Message>) => Promise<void>;
   addMessage: (conversationId: string, msg: Message) => void;
   setTyping: (conversationId: string, userId: string, username: string | null) => void;
@@ -69,15 +73,51 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   sendMessage: async (conversationId, payload) => {
-    // Gửi qua socket ưu tiên, fallback HTTP
+    // Optimistic add — nếu là text/sticker/gif đã có đủ metadata,
+    // hiện tại ta chờ server broadcast (qua socket) hoặc response (HTTP).
+    // Để đơn giản và tránh duplicate, không thêm message vào store trước.
     const { getSocket } = await import("@/lib/socket");
     const socket = getSocket();
     if (socket?.connected) {
-      socket.emit("message:send", { conversationId, ...payload });
-    } else {
-      // fallback
-      const m = await api.post(`/messages/${conversationId}/messages`, payload);
+      // Dùng ack callback để biết kết quả
+      const ack = await new Promise<{ ok: boolean; error?: string; status?: number; retryAfterMs?: number; message?: Message }>(
+        (resolve) => {
+          const t = setTimeout(
+            () => resolve({ ok: false, error: "Timeout" }),
+            15000
+          );
+          socket.emit(
+            "message:send",
+            { conversationId, ...payload },
+            (response: any) => {
+              clearTimeout(t);
+              resolve(response || { ok: false, error: "Không nhận được phản hồi" });
+            }
+          );
+        }
+      );
+      if (!ack.ok) {
+        const e: any = new Error(ack.error || "Gửi thất bại");
+        e.status = ack.status;
+        e.retryAfterMs = ack.retryAfterMs;
+        throw e;
+      }
+      // Server sẽ broadcast về qua `message:new` → addMessage tự chạy.
+      return;
+    }
+    // Fallback HTTP
+    try {
+      const m = await api.post(`/messages/${conversationId}/messages`, {
+        conversationId,
+        ...payload,
+      });
       get().addMessage(conversationId, m.data.message);
+    } catch (e: any) {
+      const err: any = new Error(
+        e?.response?.data?.message || "Gửi thất bại"
+      );
+      err.status = e?.response?.status;
+      throw err;
     }
   },
 

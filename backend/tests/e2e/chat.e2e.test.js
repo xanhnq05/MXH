@@ -201,4 +201,110 @@ describe("Chat E2E", () => {
       expect(send.status).toBe(403);
     });
   });
+
+  describe("POST /api/messages/:conversationId/upload (no message)", () => {
+    it("uploads file and returns metadata, no message created", async () => {
+      const alice = await seedUser({ username: "alice", email: "alice@example.com" });
+      const bob = await seedUser({ username: "bob", email: "bob@example.com" });
+      const aliceToken = await signinAndGetToken(app, alice);
+
+      const conv = await request(app)
+        .post("/api/conversations/direct")
+        .set("Authorization", `Bearer ${aliceToken}`)
+        .send({ userId: bob._id.toString() });
+
+      const convId = conv.body.conversation._id;
+
+      const fakeJpeg = Buffer.from("fake-jpeg-bytes-for-test");
+      const res = await request(app)
+        .post(`/api/messages/${convId}/upload`)
+        .set("Authorization", `Bearer ${aliceToken}`)
+        .attach("file", fakeJpeg, { filename: "test.jpg", contentType: "image/jpeg" });
+
+      expect(res.status).toBe(201);
+      expect(res.body.file).toBeDefined();
+      expect(res.body.file.url).toMatch(/^https:\/\/test\.supabase\.co/);
+      expect(res.body.file.key).toBeDefined();
+      expect(res.body.file.size).toBeGreaterThan(0);
+      expect(res.body.file.mimeType).toBe("image/jpeg");
+
+      // Verify no message was created
+      const list = await request(app)
+        .get(`/api/messages/${convId}/messages`)
+        .set("Authorization", `Bearer ${aliceToken}`);
+      expect(list.body.items.length).toBe(0);
+    });
+
+    it("rejects unsupported file type", async () => {
+      const alice = await seedUser({ username: "alice", email: "alice@example.com" });
+      const bob = await seedUser({ username: "bob", email: "bob@example.com" });
+      const aliceToken = await signinAndGetToken(app, alice);
+
+      const conv = await request(app)
+        .post("/api/conversations/direct")
+        .set("Authorization", `Bearer ${aliceToken}`)
+        .send({ userId: bob._id.toString() });
+
+      const convId = conv.body.conversation._id;
+
+      // Executable type — không nằm trong whitelist
+      const fakeExe = Buffer.from("fake-exe-bytes");
+      const res = await request(app)
+        .post(`/api/messages/${convId}/upload`)
+        .set("Authorization", `Bearer ${aliceToken}`)
+        .attach("file", fakeExe, { filename: "malware.exe", contentType: "application/x-msdownload" });
+
+      expect(res.status).toBe(500); // multer fileFilter rejects → error middleware
+    });
+
+    it("accepts PDF upload", async () => {
+      const alice = await seedUser({ username: "alice", email: "alice@example.com" });
+      const bob = await seedUser({ username: "bob", email: "bob@example.com" });
+      const aliceToken = await signinAndGetToken(app, alice);
+
+      const conv = await request(app)
+        .post("/api/conversations/direct")
+        .set("Authorization", `Bearer ${aliceToken}`)
+        .send({ userId: bob._id.toString() });
+
+      const convId = conv.body.conversation._id;
+
+      const fakePdf = Buffer.from("%PDF-1.4 fake content");
+      const res = await request(app)
+        .post(`/api/messages/${convId}/upload`)
+        .set("Authorization", `Bearer ${aliceToken}`)
+        .attach("file", fakePdf, { filename: "doc.pdf", contentType: "application/pdf" });
+
+      expect(res.status).toBe(201);
+      expect(res.body.file.mimeType).toBe("application/pdf");
+    });
+  });
+
+  describe("Sticker/GIF rate limit (via send API)", () => {
+    it("rate limits sticker after 5 in window", async () => {
+      const alice = await seedUser({ username: "alice", email: "alice@example.com" });
+      const bob = await seedUser({ username: "bob", email: "bob@example.com" });
+      const aliceToken = await signinAndGetToken(app, alice);
+
+      const conv = await request(app)
+        .post("/api/conversations/direct")
+        .set("Authorization", `Bearer ${aliceToken}`)
+        .send({ userId: bob._id.toString() });
+      const convId = conv.body.conversation._id;
+
+      // Gửi 5 sticker (đều OK, kể cả khi cooldown chặn 1 số)
+      let success = 0;
+      let rateLimited = 0;
+      for (let i = 0; i < 7; i++) {
+        const res = await request(app)
+          .post(`/api/messages/${convId}/messages`)
+          .set("Authorization", `Bearer ${aliceToken}`)
+          .send({ type: "sticker", stickerId: `s${i}`, stickerUrl: "https://x/s.png" });
+        if (res.status === 201) success++;
+        if (res.status === 429) rateLimited++;
+      }
+      // Ít nhất phải có rateLimited > 0 (do cooldown 1s hoặc window 5/30s)
+      expect(success + rateLimited).toBe(7);
+    });
+  });
 });

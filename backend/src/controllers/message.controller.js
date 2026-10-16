@@ -17,7 +17,26 @@ export const messageController = {
     res.status(201).json({ message: m });
   }),
 
+  /**
+   * Upload file (ảnh/tệp/voice) chỉ để lấy metadata.
+   * KHÔNG tạo message. Client phải gọi tiếp `socket.emit("message:send", { type, fileUrl, ... })`
+   * để tạo message. Tránh double-upload / double-message.
+   */
   upload: asyncHandler(async (req, res) => {
+    const result = await messageService.uploadOnly(
+      req.user._id,
+      req.params.conversationId,
+      req.file
+    );
+    res.status(201).json({ file: result });
+  }),
+
+  /**
+   * Legacy: upload + tạo message trong 1 bước.
+   * Vẫn hoạt động để tương thích ngược, khuyến nghị dùng upload + message:send.
+   * @deprecated
+   */
+  uploadAndSend: asyncHandler(async (req, res) => {
     const m = await messageService.uploadAndSend(
       req.user._id,
       req.params.conversationId,

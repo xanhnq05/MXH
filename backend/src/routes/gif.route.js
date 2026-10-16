@@ -1,9 +1,13 @@
-// routes cho GIF trending — đọc file JSON tĩnh.
+// routes cho media/sticker/gif (production): tất cả trỏ về mediaService.
+// Legacy `trending.json` Giphy URL chỉ trả về kèm flag `isLegacy: true` để frontend
+// biết mà không hiển thị trong suggestion production.
+
 import { Router } from "express";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import path from "path";
 import { protectedRoute } from "../middlewares/auth.middleware.js";
+import { mediaService } from "../services/media.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,9 +21,13 @@ const TRENDING_PATH = path.join(
 );
 
 let cached = null;
-const getTrending = () => {
+const getTrendingLegacy = () => {
   if (!cached) {
-    cached = JSON.parse(readFileSync(TRENDING_PATH, "utf-8"));
+    try {
+      cached = JSON.parse(readFileSync(TRENDING_PATH, "utf-8"));
+    } catch {
+      cached = { categories: [] };
+    }
   }
   return cached;
 };
@@ -27,18 +35,40 @@ const getTrending = () => {
 const router = Router();
 router.use(protectedRoute);
 
-router.get("/trending", (req, res) => {
-  res.json(getTrending());
+// ===== Media search (production): dùng MediaAsset =====
+router.get("/search", async (req, res, next) => {
+  try {
+    const q = (req.query.q || "").toString();
+    const mediaType = req.query.mediaType;
+    const items = await mediaService.search(q, { mediaType, limit: 24 });
+    // Trả về cả `items` (mới) và `gifs` (tương thích ngược với FE cũ)
+    res.json({ items, gifs: items });
+  } catch (e) {
+    next(e);
+  }
 });
 
-/**
- * GET /api/gifs/search?q=...
- * Tìm GIF theo từ khoá. Đơn giản: quét tất cả categories, so khớp tag.
- */
-router.get("/search", (req, res) => {
+// ===== Sticker packs (giữ tương thích) =====
+router.get("/packs", async (req, res, next) => {
+  try {
+    res.json({ packs: await mediaService.listPacks() });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ===== Legacy trending.json (đánh dấu isLegacy) =====
+router.get("/trending", (req, res) => {
+  const data = getTrendingLegacy();
+  // Trả về kèm isLegacy để client biết không dùng trong suggestion production
+  res.json({ ...data, isLegacy: true });
+});
+
+// ===== Legacy search (JSON) — fallback =====
+router.get("/search-legacy", (req, res) => {
   const q = (req.query.q || "").toLowerCase().trim();
   if (!q) return res.json({ gifs: [] });
-  const { categories } = getTrending();
+  const { categories } = getTrendingLegacy();
   const results = [];
   for (const cat of categories) {
     for (const gif of cat.gifs) {
@@ -48,6 +78,7 @@ router.get("/search", (req, res) => {
           category: cat.key,
           categoryName: cat.name,
           icon: cat.icon,
+          isLegacy: true,
         });
       }
     }

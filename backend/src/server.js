@@ -27,6 +27,7 @@ import notificationRoute from "./routes/notification.route.js";
 import callRoute from "./routes/call.route.js";
 import stickerRoute from "./routes/sticker.route.js";
 import gifRoute from "./routes/gif.route.js";
+import adminRoute from "./routes/admin.route.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -71,6 +72,7 @@ app.use("/api/notifications", notificationRoute);
 app.use("/api/calls", callRoute);
 app.use("/api/stickers", stickerRoute);
 app.use("/api/gifs", gifRoute);
+app.use("/api/admin", adminRoute);
 
 // ===== 404 + Error handler (cuối cùng) =====
 app.use(notFoundMiddleware);

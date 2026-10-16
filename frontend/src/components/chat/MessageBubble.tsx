@@ -1,5 +1,21 @@
 // MessageBubble — hiển thị 1 tin nhắn. Hỗ trợ: text, image, voice, sticker, gif, file, reply.
+// Dùng Lucide icons thay emoji cho system/preview; vẫn render emoji nếu user nhập trong text.
 
+import { useState } from "react";
+import { format } from "date-fns";
+import {
+  Reply,
+  MoreVertical,
+  Trash2,
+  Copy,
+  Pin,
+  FileText,
+  Image as ImageIcon,
+  Sticker as StickerIcon,
+  Film,
+  Music,
+  Download,
+} from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,13 +24,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Reply, MoreVertical, Trash2, Copy, Pin } from "lucide-react";
-import { format } from "date-fns";
-import type { Message, User } from "@/types/message";
-import { useLightbox } from "@/stores/useLightboxStore";
-import { useState } from "react";
 import { chatService } from "@/services/chat.service";
 import { toast } from "sonner";
+import { useLightbox } from "@/stores/useLightboxStore";
+import { cn } from "@/lib/utils";
+import type { Message, User } from "@/types/message";
 
 interface MessageBubbleProps {
   msg: Message;
@@ -27,6 +41,33 @@ interface MessageBubbleProps {
   isGroup: boolean;
 }
 
+const formatBytes = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+};
+
+const replyPreviewFor = (reply: Message | string | null | undefined) => {
+  if (!reply || typeof reply === "string") {
+    return { icon: <FileText className="h-3 w-3" />, label: "Tin nhắn" };
+  }
+  switch (reply.type) {
+    case "image":
+      return { icon: <ImageIcon className="h-3 w-3" />, label: "Hình ảnh" };
+    case "voice":
+      return { icon: <Music className="h-3 w-3" />, label: "Tin nhắn thoại" };
+    case "sticker":
+    case "gif":
+      return { icon: <StickerIcon className="h-3 w-3" />, label: "Sticker" };
+    case "file":
+      return { icon: <FileText className="h-3 w-3" />, label: "Tệp đính kèm" };
+    case "share_post":
+      return { icon: <Film className="h-3 w-3" />, label: "Bài viết" };
+    default:
+      return null;
+  }
+};
+
 const MessageBubble = ({
   msg,
   isMe,
@@ -38,7 +79,7 @@ const MessageBubble = ({
   isGroup,
 }: MessageBubbleProps) => {
   const lightbox = useLightbox();
-  const [decryptedText, setDecryptedText] = useState<string | null>(null);
+  const [imgError, setImgError] = useState(false);
 
   const sender = typeof msg.senderId === "object" ? (msg.senderId as User) : null;
 
@@ -49,6 +90,7 @@ const MessageBubble = ({
   };
 
   const handleDelete = async () => {
+    if (!window.confirm("Xoá tin nhắn này?")) return;
     try {
       await chatService.removeMessage(msg._id);
       onDeleted(msg._id);
@@ -66,68 +108,61 @@ const MessageBubble = ({
   };
 
   const handlePin = async () => {
+    if (!msg._id) return;
     try {
-      // Pin/unpin sẽ handle ở component cha
-      toast("Chức năng ghim sẽ được thêm");
-    } catch {}
+      await chatService.pinMessage(msg.conversationId, msg._id);
+      toast.success("Đã ghim");
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Không thể ghim");
+    }
   };
 
-  const replyTarget = typeof msg.replyTo === "object" && msg.replyTo !== null
-    ? (msg.replyTo as Message)
-    : null;
+  const replyTarget =
+    typeof msg.replyTo === "object" && msg.replyTo !== null
+      ? (msg.replyTo as Message)
+      : null;
+  const replyPreview = replyPreviewFor(replyTarget);
+  const replyText =
+    replyTarget?.type === "text" ? replyTarget.content : replyPreview?.label;
 
   return (
-    <div className={`flex gap-2 group ${isMe ? "flex-row-reverse" : ""}`}>
+    <div
+      className={cn(
+        "flex gap-2 group/message items-end",
+        isMe ? "flex-row-reverse" : "flex-row"
+      )}
+    >
       {showAvatar && !isMe ? (
         <Avatar className="h-8 w-8 shrink-0">
           <AvatarImage src={sender?.avatarUrl} />
-          <AvatarFallback>{sender?.displayName?.[0]?.toUpperCase()}</AvatarFallback>
+          <AvatarFallback className="bg-muted text-xs font-semibold">
+            {sender?.displayName?.[0]?.toUpperCase()}
+          </AvatarFallback>
         </Avatar>
       ) : (
-        <div className="w-8 shrink-0" />
+        <div className="w-8 shrink-0" aria-hidden="true" />
       )}
 
-      <div className={`max-w-[70%] flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-        {/* Sender name (group) */}
+      <div
+        className={cn(
+          "max-w-[78%] md:max-w-[68%] flex flex-col min-w-0",
+          isMe ? "items-end" : "items-start"
+        )}
+      >
         {showName && !isMe && isGroup && sender && (
-          <p className="text-xs text-muted-foreground mb-0.5 px-1">
+          <p className="text-xs font-medium text-muted-foreground mb-0.5 px-1">
             {sender.displayName}
           </p>
         )}
 
-        {/* Reply quote */}
-        {replyTarget && (
+        <div className="flex items-end gap-1">
+          {/* Action menu (always shown on mobile, hover on desktop) */}
           <div
-            className={`text-xs bg-muted/50 rounded px-2 py-1 mb-1 max-w-full truncate border-l-2 border-primary ${
-              isMe ? "self-end" : "self-start"
-            }`}
-          >
-            <p className="font-semibold">
-              {typeof replyTarget.senderId === "object"
-                ? replyTarget.senderId.displayName
-                : "Người gửi"}
-            </p>
-            <p className="truncate opacity-80">
-              {replyTarget.type === "text"
-                ? replyTarget.content
-                : replyTarget.type === "image"
-                ? "📷 Hình ảnh"
-                : replyTarget.type === "sticker" || replyTarget.type === "gif"
-                ? "🖼️ Sticker"
-                : replyTarget.type === "voice"
-                ? "🎤 Voice"
-                : "📎 File"}
-            </p>
-          </div>
-        )}
-
-        {/* Bubble */}
-        <div className="flex items-center gap-1">
-          {/* Action menu (hover) */}
-          <div
-            className={`opacity-0 group-hover:opacity-100 transition-opacity ${
-              isMe ? "order-first" : ""
-            }`}
+            className={cn(
+              "transition-opacity",
+              isMe ? "order-first" : "",
+              "opacity-0 group-hover/message:opacity-100 focus-within:opacity-100"
+            )}
           >
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -153,7 +188,10 @@ const MessageBubble = ({
                   <Pin className="h-4 w-4 mr-2" /> Ghim
                 </DropdownMenuItem>
                 {isMe && (
-                  <DropdownMenuItem onClick={handleDelete} className="text-destructive">
+                  <DropdownMenuItem
+                    onClick={handleDelete}
+                    className="text-destructive focus:text-destructive"
+                  >
                     <Trash2 className="h-4 w-4 mr-2" /> Xoá
                   </DropdownMenuItem>
                 )}
@@ -162,76 +200,121 @@ const MessageBubble = ({
           </div>
 
           <div
-            className={`rounded-2xl overflow-hidden ${
+            className={cn(
+              "rounded-2xl overflow-hidden break-words",
               msg.type === "sticker" || msg.type === "gif"
-                ? "bg-transparent"
+                ? "bg-transparent shadow-none"
                 : isMe
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted"
-            }`}
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-foreground",
+              msg.type === "text" && "px-3 py-2",
+              msg.type === "image" && "bg-transparent",
+              msg.type === "voice" && "px-3 py-2 min-w-[200px]",
+              msg.type === "file" && "px-3 py-2"
+            )}
           >
             {msg.type === "text" && (
-              <p className="text-sm whitespace-pre-wrap px-3 py-2 break-words">
-                {decryptedText || msg.content}
+              <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                {msg.content}
               </p>
             )}
 
-            {msg.type === "image" && msg.fileUrl && (
+            {msg.type === "image" && msg.fileUrl && !imgError && (
               <img
                 src={msg.fileUrl}
                 alt=""
                 onClick={handleImageClick}
-                className="max-w-xs max-h-80 object-cover cursor-pointer hover:opacity-95"
+                onError={() => setImgError(true)}
+                className="max-w-full sm:max-w-[320px] max-h-80 object-cover rounded-2xl cursor-pointer hover:opacity-95 transition-opacity"
                 loading="lazy"
               />
             )}
+            {msg.type === "image" && imgError && (
+              <div className="flex items-center gap-2 px-3 py-2 text-xs opacity-80">
+                <ImageIcon className="h-4 w-4" /> Không tải được ảnh
+              </div>
+            )}
 
             {msg.type === "voice" && msg.fileUrl && (
-              <div className="px-3 py-2 min-w-[200px]">
-                <audio src={msg.fileUrl} controls className="w-full h-8" />
+              <div className="flex flex-col gap-1">
+                <audio
+                  src={msg.fileUrl}
+                  controls
+                  className="h-8 max-w-full"
+                  preload="metadata"
+                />
                 {msg.duration && (
-                  <p className="text-xs opacity-70 mt-1">{msg.duration}s</p>
+                  <p className="text-[10px] opacity-70">
+                    {Math.floor(msg.duration / 60)}:
+                    {String(Math.floor(msg.duration % 60)).padStart(2, "0")}
+                  </p>
                 )}
               </div>
             )}
 
-            {msg.type === "sticker" || msg.type === "gif" ? (
+            {(msg.type === "sticker" || msg.type === "gif") && msg.stickerUrl && (
               <img
                 src={msg.stickerUrl}
                 alt=""
-                className="w-32 h-32 object-contain cursor-pointer"
+                className="w-28 h-28 md:w-32 md:h-32 object-contain cursor-pointer"
                 loading="lazy"
               />
-            ) : null}
+            )}
 
             {msg.type === "file" && (
               <a
                 href={msg.fileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`flex items-center gap-2 px-3 py-2 underline ${
-                  isMe ? "text-primary-foreground" : ""
-                }`}
+                className={cn(
+                  "flex items-center gap-2 text-sm hover:underline",
+                  isMe ? "text-primary-foreground" : "text-foreground"
+                )}
               >
-                📎 {msg.fileName || "File"}
+                <FileText className="h-4 w-4 shrink-0" />
+                <span className="truncate max-w-[180px]">
+                  {msg.fileName || "Tệp đính kèm"}
+                </span>
                 {msg.fileSize && (
-                  <span className="text-xs opacity-70">
-                    ({(msg.fileSize / 1024).toFixed(1)} KB)
+                  <span className="text-[11px] opacity-70 shrink-0">
+                    {formatBytes(msg.fileSize)}
                   </span>
                 )}
+                <Download className="h-3.5 w-3.5 opacity-60 ml-1" />
               </a>
             )}
 
             {msg.type === "system" && (
-              <p className="text-xs italic text-muted-foreground px-3 py-1">
+              <p className="text-xs italic text-muted-foreground">
                 {msg.content}
               </p>
             )}
           </div>
         </div>
 
-        {/* Time */}
-        <p className="text-[10px] text-muted-foreground mt-0.5 px-1">
+        {/* Reply quote + time */}
+        {replyTarget && (
+          <div
+            className={cn(
+              "text-[11px] rounded-md px-2 py-1 mb-1 max-w-full border-l-2 bg-muted/40",
+              isMe ? "self-end border-primary" : "self-start border-muted-foreground/40"
+            )}
+          >
+            <p className="font-semibold opacity-80">
+              {typeof replyTarget.senderId === "object"
+                ? replyTarget.senderId.displayName
+                : "Người gửi"}
+            </p>
+            <p className="truncate opacity-70 max-w-[220px]">{replyText}</p>
+          </div>
+        )}
+
+        <p
+          className={cn(
+            "text-[10px] text-muted-foreground mt-0.5 px-1",
+            isMe ? "text-right" : "text-left"
+          )}
+        >
           {format(new Date(msg.createdAt), "HH:mm")}
         </p>
       </div>
