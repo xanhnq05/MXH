@@ -1,0 +1,56 @@
+{
+  "categories": [
+    {
+      "key": "happy",
+      "name": "Vui vẻ",
+      "icon": "😄",
+      "gifs": [
+        { "id": "happy-1", "tags": ["happy", "vui", "cười", "laugh", "lol"], "url": "https://media.giphy.com/media/3o7TKr3rCfTtTHEMLe/giphy.gif" },
+        { "id": "happy-2", "tags": ["happy", "vui", "dance"], "url": "https://media.giphy.com/media/26FPq3Vk3CelOpxNu/giphy.gif" },
+        { "id": "happy-3", "tags": ["happy", "vui", "yay"], "url": "https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif" }
+      ]
+    },
+    {
+      "key": "sad",
+      "name": "Buồn",
+      "icon": "😢",
+      "gifs": [
+        { "id": "sad-1", "tags": ["sad", "buồn", "cry", "khóc"], "url": "https://media.giphy.com/media/d2lcHJTG5T8gFaWli/giphy.gif" },
+        { "id": "sad-2", "tags": ["sad", "buồn", "tear"], "url": "https://media.giphy.com/media/ROF8OQvDmxytW/giphy.gif" }
+      ]
+    },
+    {
+      "key": "love",
+      "name": "Yêu thương",
+      "icon": "❤️",
+      "gifs": [
+        { "id": "love-1", "tags": ["love", "yêu", "thương", "heart"], "url": "https://media.giphy.com/media/3o6Zt6KHxJTbXCnSvu/giphy.gif" },
+        { "id": "love-2", "tags": ["love", "yêu", "kiss"], "url": "https://media.giphy.com/media/3oEdv3Eu2m3X8hYsre/giphy.gif" }
+      ]
+    },
+    {
+      "key": "angry",
+      "name": "Giận dữ",
+      "icon": "😡",
+      "gifs": [
+        { "id": "angry-1", "tags": ["angry", "giận", "mad"], "url": "https://media.giphy.com/media/l1J9qemt9NjGQhEGI/giphy.gif" }
+      ]
+    },
+    {
+      "key": "wow",
+      "name": "Ngạc nhiên",
+      "icon": "😲",
+      "gifs": [
+        { "id": "wow-1", "tags": ["wow", "ngạc nhiên", "shocked"], "url": "https://media.giphy.com/media/3o7TKsQ8gqVrXyR8sw/giphy.gif" }
+      ]
+    },
+    {
+      "key": "meme",
+      "name": "Meme",
+      "icon": "🤡",
+      "gifs": [
+        { "id": "meme-1", "tags": ["meme", "lol", "funny", "cười"], "url": "https://media.giphy.com/media/3o7TKtnuHUHHmtA9gs/giphy.gif" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,141 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme inline {
+  /* GreenX theme: chủ đạo cam #FF6B35 + cam sáng #FF9F43 */
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(220 20% 14%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(220 20% 14%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(220 20% 14%);
+
+  /* Primary: #FF6B35 — cam chủ đạo */
+  --color-primary: hsl(16 100% 60%);
+  --color-primary-foreground: hsl(0 0% 100%);
+
+  /* Secondary: #FF9F43 — cam sáng */
+  --color-secondary: hsl(28 100% 63%);
+  --color-secondary-foreground: hsl(20 100% 14%);
+
+  --color-muted: hsl(28 30% 96%);
+  --color-muted-foreground: hsl(220 10% 45%);
+  --color-accent: hsl(28 100% 95%);
+  --color-accent-foreground: hsl(16 100% 30%);
+
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+
+  --color-border: hsl(28 20% 90%);
+  --color-input: hsl(28 20% 90%);
+  --color-ring: hsl(16 100% 60%);
+
+  --color-online: hsl(142 71% 45%);
+  --color-offline: hsl(220 10% 60%);
+
+  --radius: 0.625rem;
+}
+
+@layer base {
+  * {
+    border-color: hsl(28 20% 90%);
+  }
+  body {
+    background-color: hsl(0 0% 100%);
+    color: hsl(220 20% 14%);
+  }
+  .dark {
+    --color-background: hsl(220 25% 9%);
+    --color-foreground: hsl(28 30% 96%);
+    --color-card: hsl(220 22% 12%);
+    --color-card-foreground: hsl(28 30% 96%);
+    --color-popover: hsl(220 22% 12%);
+    --color-popover-foreground: hsl(28 30% 96%);
+    --color-primary: hsl(16 100% 62%);
+    --color-primary-foreground: hsl(0 0% 100%);
+    --color-secondary: hsl(28 100% 65%);
+    --color-secondary-foreground: hsl(20 100% 14%);
+    --color-muted: hsl(220 18% 18%);
+    --color-muted-foreground: hsl(28 15% 70%);
+    --color-accent: hsl(220 18% 18%);
+    --color-accent-foreground: hsl(28 100% 80%);
+    --color-destructive: hsl(0 70% 50%);
+    --color-destructive-foreground: hsl(0 0% 100%);
+    --color-border: hsl(220 18% 22%);
+    --color-input: hsl(220 18% 22%);
+    --color-ring: hsl(16 100% 62%);
+    --color-online: hsl(142 60% 50%);
+    --color-offline: hsl(220 10% 55%);
+  }
+  .dark body {
+    background-color: hsl(220 25% 9%);
+    color: hsl(28 30% 96%);
+  }
+}
+
+/* Scrollbar tùy chỉnh */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(28 20% 80%);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(16 100% 60%);
+}
+
+/* Gradient utility cho GreenX */
+@layer utilities {
+  .bg-greenx-gradient {
+    background: linear-gradient(135deg, #ff6b35 0%, #ff9f43 100%);
+  }
+  .text-greenx-gradient {
+    background: linear-gradient(135deg, #ff6b35 0%, #ff9f43 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  /* Container giới hạn width cho laptop/desktop */
+  .container-page {
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  @media (min-width: 640px) {
+    .container-page {
+      padding-left: 1.25rem;
+      padding-right: 1.25rem;
+    }
+  }
+  @media (min-width: 768px) {
+    .container-page {
+      max-width: 720px;
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .container-page {
+      max-width: 640px;
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+  @media (min-width: 1280px) {
+    .container-page {
+      max-width: 720px;
+    }
+  }
+  @media (min-width: 1536px) {
+    .container-page {
+      max-width: 800px;
+    }
+  }
+}
