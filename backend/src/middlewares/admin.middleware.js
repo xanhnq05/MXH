@@ -13,8 +13,10 @@ const parseList = (s) =>
     .map((x) => x.trim().toLowerCase())
     .filter(Boolean);
 
-const getAdminEmails = () => parseList(env.ADMIN_EMAILS || process.env.ADMIN_EMAILS);
-const getAdminIds = () => parseList(env.ADMIN_USER_IDS || process.env.ADMIN_USER_IDS);
+// Luôn đọc runtime để test có thể override qua process.env
+const getAdminEmails = () =>
+  parseList(process.env.ADMIN_EMAILS || env.ADMIN_EMAILS);
+const getAdminIds = () => parseList(process.env.ADMIN_USER_IDS || env.ADMIN_USER_IDS);
 
 /** Trả về true nếu user là admin */
 export const isAdmin = (user) => {

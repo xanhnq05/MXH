@@ -115,14 +115,24 @@ const FriendsPage = () => {
         friendshipService.list(),
         friendshipService.incoming(),
         friendshipService.sent(),
-        friendshipService.suggestions(20).catch(() => []),
+        friendshipService.suggestions(20).catch((e) => {
+          // 429 = rate limit, suggestions khong quan trong, bo qua
+          if (e?.response?.status !== 429) throw e;
+          return [];
+        }),
       ]);
       setFriends(f);
       setIncoming(i);
       setSent(s);
       setSuggestions(sg);
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error("Load friends error:", e);
+      // Hien thi toast neu bi 429 de user biet ly do
+      if (e?.response?.status === 429) {
+        toast.error("Qua nhanh! Vui long doi vai giay roi thu lai.");
+      } else {
+        toast.error("Khong the tai danh sach. Vui long thu lai.");
+      }
     } finally {
       setLoading(false);
     }
@@ -266,9 +276,7 @@ const FriendsPage = () => {
             <TabsTrigger
               value="all"
               className={cn(
-                "rounded-xl text-sm font-medium py-2 transition-all",
-                "data-[state=active]:bg-greenx-gradient data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:font-semibold",
-                "text-slate-500 data-[state=inactive]:hover:bg-orange-50"
+                "tab-active-gradient rounded-xl text-sm font-medium py-2 transition-all text-slate-500 hover:bg-orange-50"
               )}
             >
               Tất cả ({friends.length})
@@ -276,9 +284,7 @@ const FriendsPage = () => {
             <TabsTrigger
               value="suggestions"
               className={cn(
-                "rounded-xl text-sm font-medium py-2 transition-all",
-                "data-[state=active]:bg-greenx-gradient data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:font-semibold",
-                "text-slate-500 data-[state=inactive]:hover:bg-orange-50"
+                "tab-active-gradient rounded-xl text-sm font-medium py-2 transition-all text-slate-500 hover:bg-orange-50"
               )}
             >
               Gợi ý ({suggestions.length})
@@ -286,9 +292,7 @@ const FriendsPage = () => {
             <TabsTrigger
               value="incoming"
               className={cn(
-                "rounded-xl text-sm font-medium py-2 transition-all",
-                "data-[state=active]:bg-greenx-gradient data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:font-semibold",
-                "text-slate-500 data-[state=inactive]:hover:bg-orange-50"
+                "tab-active-gradient rounded-xl text-sm font-medium py-2 transition-all text-slate-500 hover:bg-orange-50"
               )}
             >
               Lời mời ({incoming.length})
@@ -296,9 +300,7 @@ const FriendsPage = () => {
             <TabsTrigger
               value="sent"
               className={cn(
-                "rounded-xl text-sm font-medium py-2 transition-all",
-                "data-[state=active]:bg-greenx-gradient data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:font-semibold",
-                "text-slate-500 data-[state=inactive]:hover:bg-orange-50"
+                "tab-active-gradient rounded-xl text-sm font-medium py-2 transition-all text-slate-500 hover:bg-orange-50"
               )}
             >
               Đã gửi ({sent.length})

@@ -68,9 +68,19 @@ const HomePage = () => {
 
   const loadSuggestions = async () => {
     try {
+      // Cache 60s trong sessionStorage de tranh goi lai nhieu lan
+      const cached = sessionStorage.getItem("sg_cache");
+      if (cached) {
+        const { ts, data } = JSON.parse(cached);
+        if (Date.now() - ts < 60_000) {
+          setSuggestions(data || []);
+          return;
+        }
+      }
       setLoadingSuggestions(true);
       const sg = await friendshipService.suggestions(5);
       setSuggestions(sg || []);
+      sessionStorage.setItem("sg_cache", JSON.stringify({ ts: Date.now(), data: sg }));
     } catch {
       // silent fail
     } finally {
