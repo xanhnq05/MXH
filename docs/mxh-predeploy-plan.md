@@ -45,7 +45,11 @@
 | CACHE-2 | Feed cache 60s | P1 | ✅ DONE | 3 | `getFeed` |
 | CACHE-3 | Comment cache 60s | P1 | ✅ DONE | 3 | `comment.service.list` |
 | CACHE-4 | Invalidate khi like/comment/post | P1 | ✅ DONE | 3 | `delPattern` |
-| CACHE-5 | Cache hit/miss metric | P1 | ❌ TODO | 3 | Cần log |
+| CACHE-5 | Cache hit/miss metric | P1 | ✅ DONE | 3 | `cache.getMetrics()` + admin route |
+| CACHE-6 | Conversation list cache | P1 | ✅ DONE | 3 | 30s TTL, invalidate on update |
+| CACHE-7 | Sticker/GIF cache | P1 | ✅ DONE | 3 | 10min TTL (metadata ít đổi) |
+| CACHE-8 | Invalidate conv cache on message | P1 | ✅ DONE | 3 | `message.service.send` |
+| CACHE-9 | CDN cache headers cho media | P1 | ❌ TODO | 3 | Supabase có sẵn? |
 | CACHE-6 | CDN cache headers cho media | P1 | ❌ TODO | 3 | Supabase có sẵn? |
 | RATE-1 | Rate limit per-user | P0 | ✅ DONE | 1 | `rateLimit.middleware.js` |
 | RATE-2 | Per-endpoint tier (read/write/upload) | P1 | ❌ TODO | 1 | Hiện tại global |
@@ -82,8 +86,10 @@
 
 ### Phase 3 — Cache nhiều tầng
 - ✅ Foundation Redis
-- ✅ Feed + Comment cache
-- ❌ Đo baseline + cache hit metric
+- ✅ Feed + Comment + Conversation + Sticker cache
+- ✅ Hit/miss metric qua admin route
+- ✅ Invalidate đúng khi update/send message
+- ✅ Frontend useDedupedGet hook (in-flight + cancel + stale time)
 - ❌ CDN headers
 
 ### Phase 4 — Upload/Video pipeline

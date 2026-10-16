@@ -121,6 +121,18 @@ export const messageService = {
     conv.lastMessageAt = message.createdAt;
     await conv.save();
 
+    // Invalidate conversation list cache (lastMessageAt thay doi)
+    try {
+      const cache = (await import("../libs/cache.js")).default;
+      await Promise.allSettled(
+        conv.members.map((m) =>
+          cache.delPattern(`conversations:user:${m.userId.toString()}:*`)
+        )
+      );
+    } catch {
+      // Silent - cache optional
+    }
+
     // Realtime broadcast
     emitToConversation(conversationId, "message:new", message);
 

@@ -4,11 +4,28 @@ import { protectedRoute } from "../middlewares/auth.middleware.js";
 import { adminOnly } from "../middlewares/admin.middleware.js";
 import { uploadMiddleware } from "../middlewares/upload.middleware.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import cache from "../libs/cache.js";
 
 const router = Router();
 
 // Tất cả route admin yêu cầu đăng nhập + quyền admin
 router.use(protectedRoute, adminOnly);
+
+// Cache metrics - hit/miss ratio de debug hieu nang
+router.get(
+  "/cache/stats",
+  asyncHandler(async (_req, res) => {
+    res.json(cache.getMetrics());
+  })
+);
+
+router.post(
+  "/cache/reset-metrics",
+  asyncHandler(async (_req, res) => {
+    cache.resetMetrics();
+    res.json({ success: true, ...cache.getMetrics() });
+  })
+);
 
 // List assets với phân trang + filter
 router.get(

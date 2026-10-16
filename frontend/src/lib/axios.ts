@@ -1,10 +1,22 @@
-import axios from "axios";
+import axios, { type AxiosRequestConfig } from "axios";
 import { useAuthStore } from "@/stores/useAuthStore";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5001/api",
   withCredentials: true, // gửi cookie httpOnly (refreshToken)
 });
+
+// ===== In-flight GET request dedup =====
+// Neu 2 component goi cung GET (cung URL + params) cung luc,
+// chi phai cho 1 request thuc su. Request thu 2 lay ket qua
+// tu promise da co. Tranh duplicate network, tiet kiem bandwidth.
+const inflightGets = new Map<string, Promise<unknown>>();
+
+const buildInflightKey = (config: AxiosRequestConfig) => {
+  const method = (config.method || "get").toLowerCase();
+  if (method !== "get") return null; // chi dedup GET
+  return `${config.url || ""}|${JSON.stringify(config.params || {})}`;
+};
 
 // Gắn access token vào header
 api.interceptors.request.use((config) => {

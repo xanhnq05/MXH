@@ -8,6 +8,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { notificationService } from "./notification.service.js";
 import { emitToUser, emitToConversation } from "../libs/socket.js";
 import { paginate } from "../utils/pagination.js";
+import cache from "../libs/cache.js";
 
 const MIN_GROUP_MEMBERS = 3;
 const MAX_GROUP_MEMBERS = 100;
@@ -28,6 +29,24 @@ const buildDirectMember = (userId, role = "member") => ({
   joinedAt: new Date(),
   lastReadMessageId: null,
 });
+
+/** Invalidate conversation list cache cho 1 user (sau khi co update) */
+const invalidateConvListCache = async (userId) => {
+  if (!userId) return;
+  try {
+    await cache.delPattern(`conversations:user:${userId.toString()}:*`);
+  } catch {
+    // Silent - cache optional
+  }
+};
+
+/** Invalidate cache cho tat ca member trong conversation */
+const invalidateConvCacheForMembers = async (conv) => {
+  if (!conv || !conv.members) return;
+  await Promise.allSettled(
+    conv.members.map((m) => invalidateConvListCache(m.userId))
+  );
+};
 
 export const chatService = {
   /** Lấy hoặc tạo hội thoại direct 1-1 */
@@ -53,6 +72,7 @@ export const chatService = {
         buildDirectMember(otherId),
       ],
     });
+    await invalidateConvCacheForMembers(conv);
     return conv;
   },
 
@@ -99,6 +119,20 @@ export const chatService = {
   },
 
   async listForUser(meId, { cursor, limit = 20 } = {}) {
+    // Cache chi ap dung cho trang dau (cursor=null, limit default 20)
+    // Trang sau se thay doi khi co tin nhan moi nen khong cache
+    const cacheKey = `conversations:user:${meId.toString()}:limit:${limit}`;
+    if (!cursor && limit === 20 && cache.isAvailable()) {
+      const cached = await cache.get(cacheKey);
+      if (cached) return cached;
+      const result = await this._fetchConversations(meId, cursor, limit);
+      await cache.set(cacheKey, result, 30);
+      return result;
+    }
+    return this._fetchConversations(meId, cursor, limit);
+  },
+
+  async _fetchConversations(meId, cursor, limit) {
     const { items, nextCursor } = await paginate({
       model: Conversation,
       filter: { "members.userId": meId },
@@ -133,12 +167,14 @@ export const chatService = {
     if (avatarUrl) conv.avatarUrl = avatarUrl;
     if (avatarId) conv.avatarId = avatarId;
     await conv.save();
+    await invalidateConvCacheForMembers(conv);
     emitToConversation(convId, "conversation:updated", conv);
     return conv;
   },
 
   async deleteGroup(meId, convId) {
     const conv = await this._assertGroup(meId, convId, ["owner"]);
+    await invalidateConvCacheForMembers(conv);
     await conv.deleteOne();
     emitToConversation(convId, "conversation:deleted", { conversationId: convId });
     return { success: true };
@@ -177,6 +213,7 @@ export const chatService = {
     }
     conv.members.splice(idx, 1);
     await conv.save();
+    await invalidateConvCacheForMembers(conv);
     emitToConversation(convId, "conversation:member-left", {
       conversationId: convId,
       userId: meId,
@@ -195,6 +232,7 @@ export const chatService = {
 
     conv.members.push(...newIds.map((id) => buildDirectMember(id, "member")));
     await conv.save();
+    await invalidateConvCacheForMembers(conv);
 
     for (const id of newIds) {
       await notificationService.push({
@@ -225,6 +263,7 @@ export const chatService = {
       throw new ApiError(403, "Chỉ chủ nhóm mới có thể xoá admin khác");
     conv.members.splice(idx, 1);
     await conv.save();
+    await invalidateConvCacheForMembers(conv);
     emitToConversation(convId, "conversation:member-removed", {
       conversationId: convId,
       userId: targetId,
@@ -244,6 +283,7 @@ export const chatService = {
       throw new ApiError(400, "Hãy chuyển quyền chủ nhóm trước");
     target.role = newRole;
     await conv.save();
+    await invalidateConvCacheForMembers(conv);
     emitToConversation(convId, "conversation:updated", conv);
     return conv;
   },
@@ -270,6 +310,7 @@ export const chatService = {
     if (currentOwner) currentOwner.role = "admin";
     target.role = "owner";
     await conv.save();
+    await invalidateConvCacheForMembers(conv);
     emitToConversation(convId, "conversation:ownership-transferred", {
       conversationId: convId,
       fromUserId: meId,
@@ -288,6 +329,7 @@ export const chatService = {
     if (!me) throw new ApiError(403, "Bạn không phải thành viên");
     me.nickname = nickname ? nickname.trim().slice(0, 40) : null;
     await conv.save();
+    await invalidateConvListCache(meId);
     emitToConversation(convId, "conversation:updated", conv);
     return conv;
   },
@@ -301,6 +343,7 @@ export const chatService = {
     if (mute && idx === -1) conv.mutedBy.push(meId);
     if (!mute && idx !== -1) conv.mutedBy.splice(idx, 1);
     await conv.save();
+    await invalidateConvListCache(meId);
     return { muted: mute };
   },
 

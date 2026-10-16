@@ -109,4 +109,11 @@ export const closeTestDB = async () => {
     await memoryServer.stop();
     memoryServer = null;
   }
+  // Cleanup Redis client de khong giu connection treo
+  try {
+    const { default: cache } = await import("../libs/cache.js");
+    await cache.disconnect();
+  } catch {
+    // ignore
+  }
 };

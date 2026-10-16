@@ -9,9 +9,9 @@
     "start": "node src/server.js",
     "lint": "node --check src/server.js",
     "seed": "node scripts/seed.js",
-    "test": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
-    "test:unit": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js tests/unit --runInBand",
-    "test:e2e": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js tests/e2e --runInBand",
+    "test": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit",
+    "test:unit": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js tests/unit --runInBand --forceExit",
+    "test:e2e": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js tests/e2e --runInBand --forceExit",
     "test:watch": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --watch"
   },
   "keywords": [
