@@ -23,7 +23,11 @@ export const addMembersSchema = z.object({
 
 export const changeRoleSchema = z.object({
   userId: objectId,
-  newRole: z.enum(["owner", "admin", "member"]),
+  newRole: z.enum(["admin", "member"]), // owner phai qua transferOwnership
+});
+
+export const transferOwnershipSchema = z.object({
+  userId: objectId,
 });
 
 export const setNicknameSchema = z.object({

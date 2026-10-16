@@ -142,16 +142,27 @@ export const chatService = {
       await conv.deleteOne();
       return { success: true, deleted: true };
     }
-    // Nếu là owner rời → chuyển quyền cho admin đầu tiên
     const idx = conv.members.findIndex(
       (m) => m.userId.toString() === meId.toString()
     );
-    if (conv.members[idx].role === "owner") {
+    const myRole = conv.members[idx].role;
+
+    if (myRole === "owner") {
+      // Owner rời: bat buoc chuyen quyen truoc neu con admin khac
+      const adminCount = conv.members.filter(
+        (m) => m.role === "admin" && m.userId.toString() !== meId.toString()
+      ).length;
+      if (adminCount === 0) {
+        // Khong con admin: phai chuyen owner cho member khac truoc
+        throw new ApiError(
+          400,
+          "Hãy chỉ định chủ nhóm mới trước khi rời nhóm (POST /:id/transfer-ownership)"
+        );
+      }
+      // Co admin: tu chuyen quyen cho admin dau tien
       const newOwner = conv.members.find(
         (m) =>
           m.userId.toString() !== meId.toString() && m.role === "admin"
-      ) || conv.members.find(
-        (m) => m.userId.toString() !== meId.toString()
       );
       if (newOwner) newOwner.role = "owner";
     }
@@ -191,14 +202,18 @@ export const chatService = {
 
   async removeMember(meId, convId, targetId) {
     const conv = await this._assertGroup(meId, convId, ["owner", "admin"]);
+    if (meId.toString() === targetId.toString())
+      throw new ApiError(400, "Không thể tự kick chính mình, hãy dùng /leave");
     const idx = conv.members.findIndex(
       (m) => m.userId.toString() === targetId.toString()
     );
     if (idx === -1) throw new ApiError(404, "Không tìm thấy thành viên");
-    // Không cho kick owner; admin không thể kick admin khác
     const target = conv.members[idx];
     if (target.role === "owner")
       throw new ApiError(403, "Không thể xoá chủ nhóm");
+    // Admin không thể kick admin khác (chỉ owner mới có quyền)
+    if (target.role === "admin" && conv.members.find((m) => m.userId.toString() === meId.toString())?.role !== "owner")
+      throw new ApiError(403, "Chỉ chủ nhóm mới có thể xoá admin khác");
     conv.members.splice(idx, 1);
     await conv.save();
     emitToConversation(convId, "conversation:member-removed", {
@@ -209,20 +224,49 @@ export const chatService = {
   },
 
   async changeRole(meId, convId, targetId, newRole) {
-    if (!["owner", "admin", "member"].includes(newRole))
-      throw new ApiError(400, "Role không hợp lệ");
+    if (!["admin", "member"].includes(newRole))
+      throw new ApiError(400, "Role không hợp lệ (chi ap dung admin/member)");
     const conv = await this._assertGroup(meId, convId, ["owner"]);
     const target = conv.members.find(
       (m) => m.userId.toString() === targetId.toString()
     );
     if (!target) throw new ApiError(404, "Không tìm thấy thành viên");
-    if (target.role === "owner" && newRole !== "owner") {
-      // Cần chuyển owner trước
+    if (target.role === "owner")
       throw new ApiError(400, "Hãy chuyển quyền chủ nhóm trước");
-    }
     target.role = newRole;
     await conv.save();
     emitToConversation(convId, "conversation:updated", conv);
+    return conv;
+  },
+
+  /**
+   * Transfer ownership: chi owner hien tai moi co quyen.
+   * Tu dong demote owner cu thanh admin (de khong mat member).
+   * Target phai la member hien tai va khong phai owner.
+   * Idempotent: neu target da la owner -> throw 400.
+   */
+  async transferOwnership(meId, convId, newOwnerId) {
+    const conv = await this._assertGroup(meId, convId, ["owner"]);
+    if (meId.toString() === newOwnerId.toString())
+      throw new ApiError(400, "Bạn đã là chủ nhóm");
+    const target = conv.members.find(
+      (m) => m.userId.toString() === newOwnerId.toString()
+    );
+    if (!target) throw new ApiError(404, "Người nhận không phải thành viên");
+    if (target.role === "owner")
+      throw new ApiError(400, "Người này đã là chủ nhóm");
+
+    // Demote current owner -> admin (de giu quyen quan tri)
+    const currentOwner = conv.members.find((m) => m.role === "owner");
+    if (currentOwner) currentOwner.role = "admin";
+    target.role = "owner";
+    await conv.save();
+    emitToConversation(convId, "conversation:ownership-transferred", {
+      conversationId: convId,
+      fromUserId: meId,
+      toUserId: newOwnerId,
+      conv: conv.toObject ? conv.toObject() : conv,
+    });
     return conv;
   },
 

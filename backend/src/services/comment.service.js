@@ -6,6 +6,8 @@ import User from "../models/User.js";
 import { ApiError } from "../utils/ApiError.js";
 import { notificationService } from "./notification.service.js";
 import { paginate } from "../utils/pagination.js";
+import { emitToUser } from "../libs/socket.js";
+import cache from "../libs/cache.js";
 
 export const commentService = {
   async create(meId, postId, { content, parentId }) {
@@ -31,6 +33,16 @@ export const commentService = {
 
     await comment.populate("authorId", "username displayName avatarUrl");
 
+    // Invalidate feed + comment list cache
+    await cache.delPattern(`feed:user:${post.authorId.toString()}:*`);
+    await cache.delPattern(`comments:post:${postId}:*`);
+
+    // Realtime broadcast
+    emitToUser(post.authorId.toString(), "post:comment", {
+      postId: post._id.toString(),
+      comment: comment.toObject ? comment.toObject() : comment,
+      commentCount: post.commentCount,
+    });
     if (parentId) {
       const parent = await Comment.findById(parentId);
       if (parent && parent.authorId.toString() !== meId.toString()) {
@@ -40,6 +52,10 @@ export const commentService = {
           type: "comment_reply",
           refId: comment._id,
           meta: { postId },
+        });
+        emitToUser(parent.authorId.toString(), "comment:reply", {
+          postId,
+          comment: comment.toObject ? comment.toObject() : comment,
         });
       }
     } else {
@@ -58,6 +74,19 @@ export const commentService = {
   },
 
   async list(postId, { cursor, limit = 20, parentId = null } = {}) {
+    // Cache 60s cho trang dau, moi post
+    if (!cursor) {
+      const cacheKey = `comments:post:${postId}:parent:${parentId || "root"}`;
+      const cached = await cache.get(cacheKey);
+      if (cached) return cached;
+      const result = await this._fetchComments(postId, cursor, limit, parentId);
+      await cache.set(cacheKey, result, 60);
+      return result;
+    }
+    return this._fetchComments(postId, cursor, limit, parentId);
+  },
+
+  async _fetchComments(postId, cursor, limit, parentId) {
     const filter = { postId, parentId, deletedAt: null };
     const { items, nextCursor } = await paginate({
       model: Comment,

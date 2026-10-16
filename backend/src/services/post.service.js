@@ -10,6 +10,7 @@ import { uploadService } from "./upload.service.js";
 import { paginate } from "../utils/pagination.js";
 import { notificationService } from "./notification.service.js";
 import cache from "../libs/cache.js";
+import { emitToUser } from "../libs/socket.js";
 
 const stripDeleted = (post) => {
   if (post.deletedAt) {
@@ -129,6 +130,14 @@ export const postService = {
       }
       throw new ApiError(404, "Bài viết không tồn tại");
     }
+    // Invalidate feed cache cua cac user nhan duoc bai nay
+    await this._invalidateFeedCacheForPost(postId);
+    // Broadcast realtime
+    emitToUser(post.authorId.toString(), "post:like", {
+      postId: post._id.toString(),
+      likeCount: post.likeCount,
+      userId: meId.toString(),
+    });
     await notificationService.push({
       recipientId: post.authorId,
       senderId: meId,
@@ -158,7 +167,26 @@ export const postService = {
       }
       throw new ApiError(404, "Bài viết không tồn tại");
     }
+    await this._invalidateFeedCacheForPost(postId);
+    emitToUser(post.authorId.toString(), "post:unlike", {
+      postId: post._id.toString(),
+      likeCount: Math.max(0, post.likeCount),
+      userId: meId.toString(),
+    });
     return { liked: false, likeCount: Math.max(0, post.likeCount) };
+  },
+
+  /**
+   * Invalidate feed cache cua user nao co the dang xem bai nay trong feed.
+   * De don gian: xoa feed cua author (vi author always xem duoc bai cua minh)
+   * va pattern feed:user:*:cursor:first (trang dau co bai nay).
+   * Trade-off: invalidate nhieu hon can, nhung dam bao consistency.
+   */
+  async _invalidateFeedCacheForPost(postId) {
+    const post = await Post.findById(postId).select("authorId");
+    if (!post) return;
+    // Trang dau cua feed cua author (de ho xem likeCount moi)
+    await cache.delPattern(`feed:user:${post.authorId.toString()}:*`);
   },
 
   // ================== NEWSFEED ==================

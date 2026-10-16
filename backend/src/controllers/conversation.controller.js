@@ -71,6 +71,16 @@ export const conversationController = {
     });
   }),
 
+  transferOwnership: asyncHandler(async (req, res) => {
+    res.json({
+      conversation: await chatService.transferOwnership(
+        req.user._id,
+        req.params.id,
+        req.body.userId
+      ),
+    });
+  }),
+
   setNickname: asyncHandler(async (req, res) => {
     res.json({
       conversation: await chatService.setNickname(

@@ -11,6 +11,7 @@ import {
   setNicknameSchema,
   muteSchema,
   pinSchema,
+  transferOwnershipSchema,
 } from "../validators/chat.validator.js";
 
 const router = Router();
@@ -30,6 +31,11 @@ router.patch(
   "/:id/role",
   validate(changeRoleSchema),
   conversationController.changeRole
+);
+router.patch(
+  "/:id/transfer-ownership",
+  validate(transferOwnershipSchema),
+  conversationController.transferOwnership
 );
 router.patch(
   "/:id/nickname",
